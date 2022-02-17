@@ -75,8 +75,8 @@ class image_texture : public texture
 
             if (!data)
             {
-                std::cerr << "ERROR: Could not load texture image file '" << filename << "'.\n";
-                width = height = 0;
+                WARN("Could not load texture image file %s", filename);
+                exit(1);
             }
 
             bytes_per_scanline = bytes_per_pixel * width;
@@ -111,7 +111,7 @@ class image_texture : public texture
             return color(color_scale*pixel[0], color_scale*pixel[1], color_scale*pixel[2]);
         }
 
-    private:
+    public:
         unsigned char *data;
         int width, height;
         int bytes_per_scanline;

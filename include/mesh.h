@@ -14,17 +14,18 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
-#include <string>
+struct triangle
+{
+	uint32_t idx[3];
+};
 
 class mesh : public hittable
 {
 public:
     mesh() {}
-    mesh(std::string& path) : file_path(path)
+    mesh(std::string& n) : name(n)
     {
-        //TODO load mesh and build aabb
 
-		//INFO("%s loaded with %d vertex and %d faces.", path.c_str(), numVerticesTotal, numFacesTotal);
     }
 
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& record) const override;
@@ -33,13 +34,13 @@ public:
     virtual vec3 random(const vec3& origin) const override;
     
 public:
-    std::string file_path;
+    std::string name;
     shared_ptr<material> mat_ptr;
 };
 
 bool mesh::hit(const ray& r, fType t_min, fType t_max, hit_record& record) const
 {
-
+    //TODO
     return true;
 }
 

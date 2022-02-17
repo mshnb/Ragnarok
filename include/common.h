@@ -19,7 +19,7 @@
 #define FN_NAME __func__
 #endif
 
-#define PRINT(print_type, ...) printf("[%c] line %d in function %s: ", print_type, __LINE__, FN_NAME);printf(__VA_ARGS__);printf("\n")
+#define PRINT(print_type, ...) {printf("[%c] line %d in function %s: ", print_type, __LINE__, FN_NAME);printf(__VA_ARGS__);printf("\n");}
 
 #define INFO(...) PRINT('I', __VA_ARGS__)
 #define WARN(...) PRINT('W', __VA_ARGS__)
@@ -87,6 +87,21 @@ inline int random_int(int min, int max)
 #else
     return ret;
 #endif
+}
+
+bool file_exists(const std::string& abs_filename) 
+{
+	bool ret;
+	FILE* fp = fopen(abs_filename.c_str(), "rb");
+	if (fp) 
+    {
+		ret = true;
+		fclose(fp);
+	}
+	else 
+		ret = false;
+
+	return ret;
 }
 
 #endif /* common_h */
