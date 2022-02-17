@@ -6,7 +6,7 @@ include_directories(include/)
 link_directories(${CMAKE_SOURCE_DIR}/lib)
 
 file(GLOB PROJECT_HEADERS include/*.h)
-file(GLOB PROJECT_SOURCES src/*.cpp)
+file(GLOB PROJECT_SOURCES src/*.cpp src/*.c)
 
 file(GLOB PROJECT_CONFIGS CMakeLists.txt
                           Readme.md
