@@ -50,6 +50,11 @@ color ray_color(const ray& r, const color& background, const hittable& world, sh
 
     ray scattered = ray(rec.p, p.generate().unit_vector());
     fType pdf_val = p.value(scattered.direction);
+    while (pdf_val < 1e-6)
+    {
+        scattered.direction = p.generate().unit_vector();
+        pdf_val = p.value(scattered.direction);
+    }
 
     return emitted
         + srec.attenuation * rec.mat_ptr->scattering_pdf(r, rec, scattered)

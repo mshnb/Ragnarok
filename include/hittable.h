@@ -34,8 +34,11 @@ class hittable
 {
 public:
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& record) const = 0;
-    virtual bool bounding_box(aabb& output_box) const = 0;
-    
+    virtual shared_ptr<aabb> bounding_box()
+    {
+        return aabb_ptr;
+    }
+
     virtual fType pdf_value(const point3& origin, const vec3& v) const
     {
         return 0.0;
@@ -45,17 +48,23 @@ public:
     {
         return vec3(1, 0, 0);
     }
+
+protected:
+    shared_ptr<aabb> aabb_ptr;
 };
 
 class translate : public hittable
 {
     public:
-        translate(shared_ptr<hittable> p, const vec3& displacement) : ptr(p), offset(displacement) {}
+        translate(shared_ptr<hittable> p, const vec3& displacement) : ptr(p), offset(displacement) 
+        {
+            this->aabb_ptr = ptr->bounding_box();
+            if(aabb_ptr)
+                aabb_ptr->reset(aabb_ptr->min() + offset, aabb_ptr->max() + offset);
+        }
 
         virtual bool hit(
             const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-
-        virtual bool bounding_box(aabb& output_box) const override;
 
     public:
         shared_ptr<hittable> ptr;
@@ -74,18 +83,6 @@ bool translate::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) con
     return true;
 }
 
-bool translate::bounding_box(aabb& output_box) const
-{
-    if (!ptr->bounding_box(output_box))
-        return false;
-
-    output_box = aabb(
-        output_box.min() + offset,
-        output_box.max() + offset);
-
-    return true;
-}
-
 class rotate_y : public hittable
 {
     public:
@@ -93,26 +90,21 @@ class rotate_y : public hittable
 
         virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
 
-        virtual bool bounding_box(aabb& output_box) const override
-    {
-            output_box = bbox;
-            return hasbox;
-        }
-
     public:
         shared_ptr<hittable> ptr;
         fType sin_theta;
         fType cos_theta;
         bool hasbox;
-        aabb bbox;
 };
 
 rotate_y::rotate_y(shared_ptr<hittable> p, fType angle) : ptr(p)
 {
+    this->aabb_ptr = ptr->bounding_box();
+
     fType radians = degrees_to_radians(angle);
     sin_theta = sin(radians);
     cos_theta = cos(radians);
-    hasbox = ptr->bounding_box(bbox);
+    hasbox = aabb_ptr != nullptr;
 
     point3 min( infinity,  infinity,  infinity);
     point3 max(-infinity, -infinity, -infinity);
@@ -123,9 +115,9 @@ rotate_y::rotate_y(shared_ptr<hittable> p, fType angle) : ptr(p)
         {
             for (int k = 0; k < 2; k++)
             {
-                fType x = i*bbox.max().x() + (1-i)*bbox.min().x();
-                fType y = j*bbox.max().y() + (1-j)*bbox.min().y();
-                fType z = k*bbox.max().z() + (1-k)*bbox.min().z();
+                fType x = i* aabb_ptr->max().x() + (1-i)* aabb_ptr->min().x();
+                fType y = j* aabb_ptr->max().y() + (1-j)* aabb_ptr->min().y();
+                fType z = k* aabb_ptr->max().z() + (1-k)* aabb_ptr->min().z();
 
                 fType newx =  cos_theta*x + sin_theta*z;
                 fType newz = -sin_theta*x + cos_theta*z;
@@ -141,7 +133,8 @@ rotate_y::rotate_y(shared_ptr<hittable> p, fType angle) : ptr(p)
         }
     }
 
-    bbox = aabb(min, max);
+    //use one copy of aabb
+    this->aabb_ptr->reset(min, max);
 }
 
 bool rotate_y::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const
@@ -189,10 +182,10 @@ class flip_face : public hittable
             return true;
         }
 
-        virtual bool bounding_box(aabb& output_box) const override
-        {
-            return ptr->bounding_box(output_box);
-        }
+//         virtual bool bounding_box(aabb& output_box) const override
+//         {
+//             return ptr->bounding_box(output_box);
+//         }
 
     public:
         shared_ptr<hittable> ptr;

@@ -17,6 +17,7 @@ class vec3
 {
 public:
     vec3() : e{0,0,0} {}
+    vec3(fType e0) : e{ e0, e0, e0 } {}
     vec3(fType e0, fType e1, fType e2) : e{e0, e1, e2} {}
     
     inline fType x() const { return e[0]; }

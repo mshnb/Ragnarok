@@ -20,12 +20,6 @@ class box : public hittable
 
         virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
 
-        virtual bool bounding_box(aabb& output_box) const override
-        {
-            output_box = aabb(box_min, box_max);
-            return true;
-        }
-
     public:
         point3 box_min;
         point3 box_max;
@@ -45,6 +39,8 @@ box::box(const point3& p0, const point3& p1, shared_ptr<material> ptr)
 
     sides.add(make_shared<yz_rect>(p0.y(), p1.y(), p0.z(), p1.z(), p1.x(), ptr));
     sides.add(make_shared<yz_rect>(p0.y(), p1.y(), p0.z(), p1.z(), p0.x(), ptr));
+
+    aabb_ptr = make_shared<aabb>(box_min, box_max);
 }
 
 bool box::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const

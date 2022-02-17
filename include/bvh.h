@@ -22,23 +22,22 @@ public:
     bvh_node(const std::vector<shared_ptr<hittable>>& src_objects,size_t start, size_t end);
 
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-    virtual bool bounding_box(aabb& output_box) const override;
     
 public:
     shared_ptr<hittable> left;
     shared_ptr<hittable> right;
-    aabb box;
 };
 
 inline bool box_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b, int axis)
 {
-    aabb box_a;
-    aabb box_b;
+    shared_ptr<aabb> box_a = a->bounding_box();
+	shared_ptr<aabb> box_b = b->bounding_box();
 
-    if (!a->bounding_box(box_a) || !b->bounding_box(box_b))
+
+    if (!box_a || !box_b)
         std::cerr << "No bounding box in bvh_node constructor.\n";
 
-    return box_a.min().e[axis] < box_b.min().e[axis];
+    return box_a->min().e[axis] < box_b->min().e[axis];
 }
 
 bool box_x_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
@@ -56,15 +55,9 @@ bool box_z_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
     return box_compare(a, b, 2);
 }
 
-bool bvh_node::bounding_box(aabb& output_box) const
-{
-    output_box = box;
-    return true;
-}
-
 bool bvh_node::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const
 {
-    if (!box.hit(r, t_min, t_max))
+    if (!aabb_ptr->hit(r, t_min, t_max))
         return false;
 
     bool hit_left = left->hit(r, t_min, t_max, rec);
@@ -107,12 +100,14 @@ bvh_node::bvh_node(const std::vector<shared_ptr<hittable>>& src_objects, size_t 
         right = make_shared<bvh_node>(objects, mid, end);
     }
 
-    aabb box_left, box_right;
+    shared_ptr<aabb> box_left = left->bounding_box();
+    shared_ptr<aabb> box_right = right->bounding_box();
 
-    if (!left->bounding_box(box_left) || !right->bounding_box(box_right))
+    if (!box_left || !box_right)
         std::cerr << "No bounding box in bvh_node constructor.\n";
 
-    box = surrounding_box(box_left, box_right);
+    aabb_ptr = make_shared<aabb>();
+    aabb_ptr->surrounding_box(box_left, box_right);
 }
 
 #endif /* bvh_h */

@@ -16,9 +16,13 @@ class sphere : public hittable
 {
 public:
     sphere() {}
-    sphere(point3 cen, fType r, shared_ptr<material> m) : center(cen), radius(r), mat_ptr(m) {}
+    sphere(point3 cen, fType r, shared_ptr<material> m) : center(cen), radius(r), mat_ptr(m) 
+    {
+        vec3 offset(abs(radius));
+		aabb_ptr = make_shared<aabb>(center - offset, center + offset);
+    }
+
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& record) const override;
-    virtual bool bounding_box(aabb& output_box) const override;
     
     virtual fType pdf_value(const point3& origin, const vec3& v) const override;
     virtual vec3 random(const vec3& origin) const override;
@@ -75,13 +79,6 @@ bool sphere::hit(const ray& r, fType t_min, fType t_max, hit_record& record) con
     get_sphere_uv(outward_normal, record.u, record.v);
     record.mat_ptr = mat_ptr;
     
-    return true;
-}
-
-bool sphere::bounding_box(aabb& output_box) const
-{
-    fType r = abs(radius);
-    output_box = aabb(center - vec3(r, r, r), center + vec3(r, r, r));
     return true;
 }
 

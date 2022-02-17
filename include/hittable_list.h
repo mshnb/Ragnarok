@@ -34,7 +34,7 @@ public:
     }
     
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-    virtual bool bounding_box(aabb& output_box) const override;
+    virtual shared_ptr<aabb> bounding_box() override;
     
     virtual fType pdf_value(const point3& origin, const vec3& v) const override;
     virtual vec3 random(const vec3& origin) const override;
@@ -43,7 +43,8 @@ public:
     std::vector<shared_ptr<hittable>> objects;
 };
 
-bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const {
+bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const 
+{
     hit_record temp_rec;
     bool hit_anything = false;
     fType closest_so_far = t_max;
@@ -61,22 +62,29 @@ bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_record& rec)
     return hit_anything;
 }
 
-bool hittable_list::bounding_box(aabb& output_box) const
+shared_ptr<aabb> hittable_list::bounding_box()
 {
-    if (objects.empty())
-        return false;
+    if (!aabb_ptr && !objects.empty())
+    {
+        shared_ptr<aabb> temp;
+		bool first_box = true;
+		for (const auto& object : objects) 
+        {
+            temp = object->bounding_box();
+			if (!temp)
+				return nullptr;
 
-    aabb temp_box;
-    bool first_box = true;
-
-    for (const auto& object : objects) {
-        if (!object->bounding_box(temp_box))
-            return false;
-        output_box = first_box ? temp_box : surrounding_box(output_box, temp_box);
-        first_box = false;
+            if (first_box)
+            {
+                aabb_ptr = make_shared<aabb>(temp);
+                first_box = false;
+            }
+            else
+                aabb_ptr->surrounding_box(aabb_ptr, temp);
+		}
     }
 
-    return true;
+    return aabb_ptr;
 }
 
 
@@ -96,8 +104,6 @@ vec3 hittable_list::random(const vec3& o) const
     auto int_size = static_cast<int>(objects.size());
     int idx = random_int(0, int_size-1);
     return objects[idx]->random(o);
-    
-    //return objects[random_int(0, int_size-1)]->random(o);
 }
 
 #endif /* hittable_list_h */

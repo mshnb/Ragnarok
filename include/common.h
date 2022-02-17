@@ -13,6 +13,17 @@
 #include <memory>
 #include <cstdlib>
 
+#ifdef _MSC_VER
+#define FN_NAME __FUNCTION__
+#else
+#define FN_NAME __func__
+#endif
+
+#define PRINT(print_type, ...) printf("[%c] line %d in function %s: ", print_type, __LINE__, FN_NAME);printf(__VA_ARGS__);printf("\n")
+
+#define INFO(...) PRINT('I', __VA_ARGS__)
+#define WARN(...) PRINT('W', __VA_ARGS__)
+
 #define USE_FP32
 #define OUTPUT_EXR
 

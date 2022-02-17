@@ -29,6 +29,10 @@ class cosine_pdf : public pdf
         virtual fType value(const vec3& direction) const override
         {
             fType cosine = dot(direction.unit_vector(), uvw.w());
+
+            if (cosine != cosine)
+                abort();
+
             return (cosine <= 0) ? 0 : cosine/pi;
         }
 

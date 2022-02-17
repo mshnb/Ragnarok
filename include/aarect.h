@@ -11,23 +11,20 @@
 #include "common.h"
 #include "hittable.h"
 
+const fType rect_pad = 1e-4;
+
 class xy_rect : public hittable
 {
 public:
     xy_rect() {}
 
     xy_rect(fType _x0, fType _x1, fType _y0, fType _y1, fType _k, shared_ptr<material> mat)
-        : x0(_x0), x1(_x1), y0(_y0), y1(_y1), k(_k), mp(mat) {};
+        : x0(_x0), x1(_x1), y0(_y0), y1(_y1), k(_k), mp(mat) 
+    {
+        aabb_ptr = make_shared<aabb>(point3(x0, y0, k - rect_pad), point3(x1, y1, k + rect_pad));
+    }
 
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-    virtual bool bounding_box(aabb& output_box) const override
-    {
-        // The bounding box must have non-zero width in each dimension, so pad the Z
-        // dimension a small amount.
-        fType pad = 1e-4;
-        output_box = aabb(point3(x0,y0, k-pad), point3(x1, y1, k+pad));
-        return true;
-    }
     
 public:
     shared_ptr<material> mp;
@@ -59,27 +56,26 @@ class xz_rect : public hittable
         xz_rect() {}
 
         xz_rect(fType _x0, fType _x1, fType _z0, fType _z1, fType _k, shared_ptr<material> mat)
-            : x0(_x0), x1(_x1), z0(_z0), z1(_z1), k(_k), mp(mat) {};
+            : x0(_x0), x1(_x1), z0(_z0), z1(_z1), k(_k), mp(mat) 
+        {
+            aabb_ptr = make_shared<aabb>(point3(x0, k - rect_pad, z0), point3(x1, k + rect_pad, z1));
+        }
 
         virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-        virtual bool bounding_box(aabb& output_box) const override
-        {
-            // The bounding box must have non-zero width in each dimension, so pad the Y
-            // dimension a small amount.
-            fType pad = 1e-4;
-            output_box = aabb(point3(x0,k-pad,z0), point3(x1, k+pad, z1));
-            return true;
-        }
 
         virtual fType pdf_value(const point3& origin, const vec3& v) const override
         {
+            //TODO use hit_fast
             hit_record rec;
             if (!this->hit(ray(origin, v), 1e-3, infinity, rec))
                 return 0;
 
+			auto cosine = fabs(dot(v, rec.normal) / v.length());
+            if (cosine < 1e-6)
+                return 0;
+
             auto area = (x1-x0)*(z1-z0);
             auto distance_squared = rec.t * rec.t * v.length_squared();
-            auto cosine = fabs(dot(v, rec.normal) / v.length());
 
             return distance_squared / (cosine * area);
         }
@@ -120,18 +116,12 @@ class yz_rect : public hittable
         yz_rect() {}
 
         yz_rect(fType _y0, fType _y1, fType _z0, fType _z1, fType _k, shared_ptr<material> mat)
-            : y0(_y0), y1(_y1), z0(_z0), z1(_z1), k(_k), mp(mat) {};
+            : y0(_y0), y1(_y1), z0(_z0), z1(_z1), k(_k), mp(mat) 
+        {
+            aabb_ptr = make_shared<aabb>(point3(k - rect_pad, y0, z0), point3(k + rect_pad, y1,  z1));
+        }
 
         virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-
-        virtual bool bounding_box(aabb& output_box) const override
-        {
-            // The bounding box must have non-zero width in each dimension, so pad the X
-            // dimension a small amount.
-            fType pad = 1e-4;
-            output_box = aabb(point3(k-pad, y0, z0), point3(k+pad, y1, z1));
-            return true;
-        }
 
     public:
         shared_ptr<material> mp;

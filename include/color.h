@@ -19,9 +19,9 @@ void write_color(float* out, color& pixel_color, int index, int samples_per_pixe
 	fType b = pixel_color.z();
 
 	// Replace NaN components with zero. See explanation in Ray Tracing: The Rest of Your Life.
-	if (r != r) r = 0.0;
-	if (g != g) g = 0.0;
-	if (b != b) b = 0.0;
+// 	if (r != r) r = 0.0;
+// 	if (g != g) g = 0.0;
+// 	if (b != b) b = 0.0;
 
 	fType scale = 1.0 / samples_per_pixel;
 
