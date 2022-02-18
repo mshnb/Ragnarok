@@ -74,6 +74,15 @@ public:
 		this->reset(small, big);
 	}
 
+	void extand(point3& p)
+	{
+        for (int i = 0; i < 3; i++)
+        {
+            minimum[i] = std::min(minimum[i], p[i]);
+            maximum[i] = std::max(maximum[i], p[i]);
+        }
+	}
+
 public:
     point3 minimum;
     point3 maximum;

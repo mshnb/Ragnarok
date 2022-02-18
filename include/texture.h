@@ -25,7 +25,7 @@ class solid_color : public texture
     public:
         solid_color() {}
         solid_color(color c) : color_value(c) {}
-
+		solid_color(fType rgb[]) : solid_color(color(rgb[0], rgb[1], rgb[2])) {}
         solid_color(fType red, fType green, fType blue) : solid_color(color(red,green,blue)) {}
 
         virtual color value(fType u, fType v, const vec3& p) const override

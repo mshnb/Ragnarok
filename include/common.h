@@ -24,6 +24,8 @@
 #define INFO(...) PRINT('I', __VA_ARGS__)
 #define WARN(...) PRINT('W', __VA_ARGS__)
 
+#define CHECK(status) if(status!=0){ERROR("check failed with err .\n", status);}
+
 #define USE_FP32
 #define OUTPUT_EXR
 
@@ -89,10 +91,10 @@ inline int random_int(int min, int max)
 #endif
 }
 
-bool file_exists(const std::string& abs_filename) 
+bool file_exists(const char* abs_filename) 
 {
 	bool ret;
-	FILE* fp = fopen(abs_filename.c_str(), "rb");
+	FILE* fp = fopen(abs_filename, "rb");
 	if (fp) 
     {
 		ret = true;

@@ -8,10 +8,8 @@
 #ifndef vector3_h
 #define vector3_h
 
-//#include <cmath>
-#include <iostream>
-
 #include "common.h"
+#include <iostream>
 
 class vec3
 {
@@ -24,6 +22,13 @@ public:
     inline fType y() const { return e[1]; }
     inline fType z() const { return e[2]; }
     
+    void assign(fType* values)
+    {
+        e[0] = values[0];
+		e[1] = values[1];
+		e[2] = values[2];
+    }
+
     vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
     fType operator[] (int i) const { return e[i]; }
     fType& operator[] (int i) { return e[i]; }

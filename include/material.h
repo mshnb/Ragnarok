@@ -153,4 +153,34 @@ class diffuse_light : public material
         shared_ptr<texture> emit;
 };
 
+class phong : public material
+{
+public:
+    phong(shared_ptr<texture> Kd, shared_ptr<texture> Ks, fType Ns, fType Ni) : diffuse(Kd), specular(Ks), shiness(Ns), ior(Ni) {}
+
+	virtual bool scatter(const ray& r_in, const hit_record& rec, scatter_record& srec) const override
+	{
+        //TODO
+		srec.is_specular = false;
+		srec.attenuation = diffuse->value(rec.u, rec.v, rec.p);
+
+		srec.pdf_ptr = make_shared<cosine_pdf>(rec.normal);
+		return true;
+	}
+
+	virtual fType scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const override
+	{
+		//TODO
+		auto cosine = dot(rec.normal, scattered.direction);
+		return cosine < 0 ? 0 : cosine / pi;
+	}
+
+public:
+	shared_ptr<texture> diffuse;
+	shared_ptr<texture> specular;
+    fType shiness;
+    fType ior;//Index of Refraction
+
+};
+
 #endif /* material_h */

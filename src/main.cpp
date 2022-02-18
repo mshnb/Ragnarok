@@ -15,11 +15,14 @@
 #include "box.h"
 #include "pdf.h"
 #include "bvh.h"
+#include "model.h"
 
 #ifdef OUTPUT_EXR
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 #endif
+
+#include "tinyxml2.h"
 
 #include <iostream>
 #include <fstream>
@@ -163,11 +166,13 @@ int main(int argc, const char * argv[])
     
     point3 lookfrom;
     point3 lookat;
+	vec3 vup(0, 1, 0);
+
     fType vfov = 40.0;
     fType aperture = 0.0;
     fType dist_to_focus = 1.0;
     
-    switch (4)
+    switch (5)
     {
         case 1:
         {
@@ -241,7 +246,54 @@ int main(int argc, const char * argv[])
             vfov = 40.0;
             break;
         }
-            
+        
+        case 5:
+        {
+            std::string model_path = "resource/veach-mis/veach-mis.obj";
+            shared_ptr<model> model_ptr = make_shared<model>(model_path);
+
+			tinyxml2::XMLDocument doc;
+            std::string xml_path = model_ptr->file_dir + model_ptr->file_name + ".xml";
+			doc.LoadFile(xml_path.c_str());
+
+            if (doc.Error())
+            {
+                WARN("error occur when parsing %s, info: [line %d]%s", xml_path.c_str(), doc.ErrorLineNum(), doc.ErrorStr());
+                exit(1);
+            }
+
+            tinyxml2::XMLElement* camera_node = doc.FirstChildElement("camera");
+
+#define PARSE_VECTOR3(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f,%f,%f", &output[0], &output[1], &output[2])
+#ifdef USE_FP32
+#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f", &output)
+#else
+#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%d", &output)
+#endif
+#define PARSE_INT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%d", &output)
+
+            if (
+				PARSE_VECTOR3(camera_node, "eye", lookfrom) != 3 ||
+				PARSE_VECTOR3(camera_node, "lookat", lookat) != 3 ||
+				PARSE_VECTOR3(camera_node, "up", vup) != 3 ||
+				PARSE_VECTOR3(camera_node, "lookat", lookat) != 3 ||
+				PARSE_FLOAT(camera_node, "up", vfov) != 1 ||
+                PARSE_INT(camera_node, "width", image_width) != 1 ||
+                PARSE_INT(camera_node, "height", image_height) != 1
+                )
+            {
+				WARN("error occur when parsing camera params");
+				exit(1);
+            }
+
+            //TODO
+            //load lights
+
+
+            aspect_ratio = static_cast<fType>(image_width) / static_cast<fType>(image_height);
+            samples_per_pixel = 10;
+        }
+
         default:
             break;
     }
@@ -249,7 +301,6 @@ int main(int argc, const char * argv[])
     //bvh_node world_wrapper(world);
     
     //camera
-    vec3 vup(0,1,0);
     camera cam(lookfrom, lookat, vup, vfov, aspect_ratio, aperture, dist_to_focus);
     
     //output image
@@ -274,8 +325,6 @@ int main(int argc, const char * argv[])
         std::cerr << "\rScanlines remaining: " << y << ' ' << std::flush;
         for(int x = 0; x < image_width; x++)
         {
-//             if (x == 60 && y == 173)
-//                 printf("\n");
             color pixel_color(0, 0, 0);
             for(int s = 0; s < samples_per_pixel; s++)
             {
