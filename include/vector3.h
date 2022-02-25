@@ -14,48 +14,89 @@
 class vec3
 {
 public:
-    vec3() : e{0,0,0} {}
-    vec3(fType e0) : e{ e0, e0, e0 } {}
-    vec3(fType e0, fType e1, fType e2) : e{e0, e1, e2} {}
+    vec3() : x(0), y(0), z(0) {}
+    vec3(fType e0) : x(e0), y(e0), z(e0) {}
+    vec3(fType e0, fType e1, fType e2) : x(e0), y(e1), z(e2) {}
     
-    inline fType x() const { return e[0]; }
-    inline fType y() const { return e[1]; }
-    inline fType z() const { return e[2]; }
-    
+	void assign(fType e0)
+	{
+		x = e0;
+		y = e0;
+		z = e0;
+	}
+
+	void assign(const vec3& v)
+	{
+		x = v[0];
+		y = v[1];
+		z = v[2];
+	}
+
     void assign(fType* values)
     {
-        e[0] = values[0];
-		e[1] = values[1];
-		e[2] = values[2];
+        x = values[0];
+		y = values[1];
+		z = values[2];
     }
 
-    vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
-    fType operator[] (int i) const { return e[i]; }
-    fType& operator[] (int i) { return e[i]; }
+	void assign(fType e0, fType e1, fType e2)
+	{
+		x = e0;
+		y = e1;
+		z = e2;
+	}
+
+    vec3 operator-() const { return vec3(-x, -y, -z); }
+    fType operator[] (int i) const 
+    {
+		switch (i)
+		{
+		default:
+		case 0:
+			return x;
+		case 1:
+			return y;
+		case 2:
+			return z;
+		}
+    }
+	fType& operator[] (int i) 
+    {
+		switch (i)
+		{
+		default:
+		case 0:
+			return x;
+		case 1:
+			return y;
+		case 2:
+			return z;
+		}
+	}
     
     vec3& operator=(const vec3& v)
     {
-        e[0] = v[0];
-        e[1] = v[1];
-        e[2] = v[2];
+        x = v.x;
+        y = v.y;
+        z = v.z;
         
         return *this;
     }
     
     vec3& operator+=(const vec3& v)
     {
-        e[0] += v.e[0];
-        e[1] += v.e[1];
-        e[2] += v.e[2];
+        x += v.x;
+        y += v.y;
+        z += v.z;
         
         return *this;
     }
     
     vec3& operator*=(const fType t)
     {
-        e[0] *= t;
-        e[1] *= t;
-        e[2] *= t;
+        x *= t;
+        y *= t;
+        z *= t;
         return *this;
     }
     
@@ -71,20 +112,28 @@ public:
     
     fType length_squared() const
     {
-        return e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+        return x * x + y * y + z * z;
     }
 
     bool near_zero() const
     {
         // Return true if the vector is close to zero in all dimensions.
         const fType s = 1e-8;
-        return (fabs(e[0]) < s) && (fabs(e[1]) < s) && (fabs(e[2]) < s);
+        return (fabs(x) < s) && (fabs(y) < s) && (fabs(z) < s);
     }
     
+    void normalize()
+    {
+        fType t = 1 / this->length();
+        x *= t;
+        y *= t;
+        z *= t;
+    }
+
     inline vec3 unit_vector() const
     {
         fType t = 1 /this->length();
-        return vec3(t*e[0], t*e[1], t*e[2]);
+        return vec3(t*x, t*y, t*z);
     }
     
     inline static vec3 random()
@@ -97,8 +146,21 @@ public:
         return vec3(random_value(min, max), random_value(min, max), random_value(min, max));
     }
     
+    inline fType max() const 
+    {
+        return std::max(x, std::max(y, z));
+    }
+
+    //for color
+	inline fType getLuminance() const 
+    {
+		return r * 0.212671 + g * 0.715160 + b * 0.072169;
+	}
+
 public:
-    fType e[3];
+	union { fType x, r; };
+	union { fType y, g; };
+	union { fType z, b; };
 };
 
 //type aliases for vec3
@@ -195,7 +257,7 @@ inline vec3 random_cosine_direction()
     auto r2 = random_value();
     auto z = sqrt(1-r2);
 
-    auto phi = 2*pi*r1;
+    auto phi = 2 * PI * r1;
     auto x = cos(phi)*sqrt(r2);
     auto y = sin(phi)*sqrt(r2);
 
@@ -208,7 +270,7 @@ inline vec3 random_to_sphere(double radius, double distance_squared)
     auto r2 = random_value();
     auto z = 1 + r2*(sqrt(1-radius*radius/distance_squared) - 1);
 
-    auto phi = 2*pi*r1;
+    auto phi = 2 * PI * r1;
     auto x = cos(phi)*sqrt(1-z*z);
     auto y = sin(phi)*sqrt(1-z*z);
 

@@ -20,7 +20,11 @@ using std::make_shared;
 class hittable_list : public hittable
 {
 public:
-    hittable_list() {}
+    hittable_list() 
+    {
+        aabb_ptr = make_shared<aabb>(std::numeric_limits<fType>::max(), -std::numeric_limits<fType>::max());
+    }
+
     hittable_list(shared_ptr<hittable> object) { add(object); }
     
     void clear()
@@ -31,10 +35,12 @@ public:
     void add(shared_ptr<hittable> object)
     {
         objects.push_back(object);
+        auto obj_aabb = object->bounding_box();
+        if (obj_aabb)
+            aabb_ptr->surrounding_box(aabb_ptr, obj_aabb);
     }
     
-    virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
-    virtual shared_ptr<aabb> bounding_box() override;
+    virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
     
     virtual fType pdf_value(const point3& origin, const vec3& v) const override;
     virtual vec3 random(const vec3& origin) const override;
@@ -43,50 +49,24 @@ public:
     std::vector<shared_ptr<hittable>> objects;
 };
 
-bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const 
+bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
 {
-    hit_record temp_rec;
+    hit_cache temp;
     bool hit_anything = false;
     fType closest_so_far = t_max;
 
     for (const auto& object : objects)
     {
-        if (object->hit(r, t_min, closest_so_far, temp_rec))
+        if (object->hit(r, t_min, closest_so_far, temp))
         {
             hit_anything = true;
-            closest_so_far = temp_rec.t;
-            rec = temp_rec;
+            closest_so_far = temp.t;
+            cache = temp;
         }
     }
 
     return hit_anything;
 }
-
-shared_ptr<aabb> hittable_list::bounding_box()
-{
-    if (!aabb_ptr && !objects.empty())
-    {
-        shared_ptr<aabb> temp;
-		bool first_box = true;
-		for (const auto& object : objects) 
-        {
-            temp = object->bounding_box();
-			if (!temp)
-				return nullptr;
-
-            if (first_box)
-            {
-                aabb_ptr = make_shared<aabb>(temp);
-                first_box = false;
-            }
-            else
-                aabb_ptr->surrounding_box(aabb_ptr, temp);
-		}
-    }
-
-    return aabb_ptr;
-}
-
 
 fType hittable_list::pdf_value(const point3& o, const vec3& v) const
 {

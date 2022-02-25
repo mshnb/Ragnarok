@@ -14,35 +14,46 @@ class onb
 {
 public:
     onb() {}
-    
-    inline vec3 operator[](int i) const { return axis[i]; }
+    onb(const vec3& n) { build_from_w(n); }
 
-    vec3 u() const { return axis[0]; }
-    vec3 v() const { return axis[1]; }
-    vec3 w() const { return axis[2]; }
-
-    vec3 local(double a, double b, double c) const
+    inline vec3 operator[](int i) const 
     {
-        return a*u() + b*v() + c*w();
+		switch (i)
+		{
+		default:
+		case 0:
+			return u;
+		case 1:
+			return w;
+		case 2:
+			return v;
+		}
     }
 
+    // Convert from world coordinates to local coordinates
     vec3 local(const vec3& a) const
     {
-        return a.x()*u() + a.y()*v() + a.z()*w();
+		return vec3(dot(a, u), dot(a, w), dot(a, v));
     }
 
-    void build_from_w(const vec3&);
+    // Convert from local coordinates to world coordinates
+    vec3 world(const vec3& a) const 
+    {
+        return u * a.x + w * a.y + v * a.z;
+    }
+
+    void build_from_w(const vec3& n);
     
 public:
-    vec3 axis[3];
+    vec3 u, w, v;
 };
 
 void onb::build_from_w(const vec3& n)
 {
-    axis[2] = n.unit_vector();
-    vec3 a = fabs(w().x()) > 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0);
-    axis[1] = cross(w(), a).unit_vector();
-    axis[0] = cross(w(), v());
+    w = n.unit_vector();
+    vec3 a = fabs(w.x) > 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0);
+    v = cross(w, a).unit_vector();
+    u = cross(v, w);
 }
 
 #endif /* onb_h */

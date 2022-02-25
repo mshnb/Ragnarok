@@ -47,29 +47,41 @@ public:
     //fast verision by Andrew Kensler at Pixar
     inline bool hit(const ray& r, fType t_min, fType t_max) const
     {
-        for (int i = 0; i < 3; i++) {
-            fType invD = 1.0 / r.direction[i];
-            fType t0 = (minimum[i] - r.origin[i]) * invD;
-            fType t1 = (maximum[i] - r.origin[i]) * invD;
-            if (invD < 0.0)
-                std::swap(t0, t1);
-            t_min = t0 > t_min ? t0 : t_min;
-            t_max = t1 < t_max ? t1 : t_max;
-            if (t_max <= t_min)
-                return false;
+        for (int i = 0; i < 3; i++) 
+        {
+            fType origin = r.origin[i], minVal = minimum[i], maxVal = maximum[i];
+
+            //The ray is parallel to the planes
+            if (r.direction[i] == 0)
+            {
+				if (origin < minVal || origin > maxVal)
+					return false;
+            }
+            else
+            {
+				fType invD = 1.0 / r.direction[i];
+				fType t0 = (minVal - origin) * invD;
+				fType t1 = (maxVal - origin) * invD;
+				if (invD < 0.0)
+					std::swap(t0, t1);
+				t_min = t0 > t_min ? t0 : t_min;
+				t_max = t1 < t_max ? t1 : t_max;
+				if (t_max < t_min)
+					return false;
+            }
         }
         return true;
     }
     
 	void surrounding_box(shared_ptr<aabb> box0, shared_ptr<aabb> box1)
 	{
-		point3 small(fmin(box0->min().x(), box1->min().x()),
-			fmin(box0->min().y(), box1->min().y()),
-			fmin(box0->min().z(), box1->min().z()));
+		point3 small(fmin(box0->min().x, box1->min().x),
+			fmin(box0->min().y, box1->min().y),
+			fmin(box0->min().z, box1->min().z));
 
-		point3 big(fmax(box0->max().x(), box1->max().x()),
-			fmax(box0->max().y(), box1->max().y()),
-			fmax(box0->max().z(), box1->max().z()));
+		point3 big(fmax(box0->max().x, box1->max().x),
+			fmax(box0->max().y, box1->max().y),
+			fmax(box0->max().z, box1->max().z));
 
 		this->reset(small, big);
 	}

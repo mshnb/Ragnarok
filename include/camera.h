@@ -37,9 +37,9 @@ public:
     ray get_ray(fType s, fType t) const
     {
         vec3 rd = lens_radius * random_in_unit_disk();
-        vec3 offset = u * rd.x() + v * rd.y();
+        vec3 offset = u * rd.x + v * rd.y;
 
-        return ray(origin + offset, low_left_corner + s*horizontal + t*vertical - origin - offset);
+        return ray(origin + offset, (low_left_corner + s * horizontal + t * vertical - origin - offset).unit_vector());
     }
     
 public:

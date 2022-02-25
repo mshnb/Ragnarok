@@ -7,163 +7,115 @@
 
 #include "common.h"
 #include "hittable_list.h"
-#include "color.h"
 #include "sphere.h"
 #include "camera.h"
 #include "material.h"
-#include "aarect.h"
 #include "box.h"
-#include "pdf.h"
 #include "bvh.h"
 #include "model.h"
+#include "scene.h"
 
-#ifdef OUTPUT_EXR
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
-#endif
 
 #include "tinyxml2.h"
 
 #include <iostream>
 #include <fstream>
 #include <time.h>
+#include <omp.h>
 
-color ray_color(const ray& r, const color& background, const hittable& world, shared_ptr<hittable_list>& lights, int depth)
+std::string model_name = "bedroom"; // "cornell-box"
+std::string resource_dir = "../resource";
+
+int samples_per_pixel = 128;
+
+int max_depth = 10;
+int rr_depth = 3;
+bool gamma_correct = false;
+
+//TODO use while instead of recursion
+color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
 {
+	if (depth >= max_depth)
+		return color(0.0);
+
     hit_record rec;
+    if (!scene.intersect(r, rec))
+        return scene.background;
     
-    if(depth <= 0)
-        return color(0, 0, 0);
-    
-    //this 1e-3 is important for reducing artifacts
-    if (!world.hit(r, 1e-3, infinity, rec))
-        return background;
-    
-    scatter_record srec;
-    color emitted = rec.mat_ptr->emitted(r, rec, rec.u, rec.v, rec.p);
-    if (!rec.mat_ptr->scatter(r, rec, srec))
-        return emitted;
-
-    if (srec.is_specular)
-        return srec.attenuation
-             * ray_color(srec.specular_ray, background, world, lights, depth-1);
-    
-    auto light_ptr = make_shared<hittable_pdf>(lights, rec.p);
-    mixture_pdf p(light_ptr, srec.pdf_ptr);
-
-    ray scattered = ray(rec.p, p.generate().unit_vector());
-    fType pdf_val = p.value(scattered.direction);
-    while (pdf_val < 1e-6)
+    auto bsdf = rec.mat_ptr;
+    if (rec.hit_light)
     {
-        scattered.direction = p.generate().unit_vector();
-        pdf_val = p.value(scattered.direction);
-    }
+        if(depth == 0)
+            return bsdf->emitted(rec);
 
-    return emitted
-        + srec.attenuation * rec.mat_ptr->scattering_pdf(r, rec, scattered)
-                           * ray_color(scattered, background, world, lights, depth-1) / pdf_val;
-}
+        if (!rec.front_face)
+            return color(0.0);
 
-hittable_list random_scene()
-{
-    hittable_list world;
+        /* Compute the prob. of generating that direction using the
+           implemented direct illumination sampling technique */
+		fType light_dir_pdf = scene.pdfLightDirect(rec, r.direction);
+        fType weight = mix_weight(bsdf_pdf, light_dir_pdf);
+        return bsdf->emitted(rec) * weight;
+    }   
 
-    auto ground_material = make_shared<lambertian>(color(0.5, 0.5, 0.5));
-    world.add(make_shared<sphere>(point3(0,-1000,0), 1000, ground_material));
+    color ret(0.0);
 
-    for (int a = -11; a < 11; a++) {
-        for (int b = -11; b < 11; b++) {
-            fType choose_mat = random_value();
-            point3 center(a + 0.9*random_value(), 0.2, b + 0.9*random_value());
+	//sample direct illumination
+    vec3 light_dir;
+	fType light_pdf;
+	color direct = scene.sampleLights(rec.p, rec.normal, light_dir, light_pdf);
+    if (!direct.near_zero())
+    {
+		onb shadingFrame(rec.normal);
+		vec3 wi = -shadingFrame.local(r.direction);
+        vec3 wo = shadingFrame.local(light_dir);
 
-            if ((center - point3(4, 0.2, 0)).length() > 0.9) {
-                shared_ptr<material> sphere_material;
+        color bsdfVal = bsdf->eval(rec, wi, wo);
+        if (!bsdfVal.near_zero())
+        {
+			// Calculate prob. of having generated that direction using BSDF sampling
+			fType bsdfPdf = bsdf->pdf(rec, wi, wo);
 
-                if (choose_mat < 0.8) {
-                    // diffuse
-                    auto albedo = color::random() * color::random();
-                    sphere_material = make_shared<lambertian>(albedo);
-                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
-                } else if (choose_mat < 0.95) {
-                    // metal
-                    auto albedo = color::random(0.5, 1);
-                    auto fuzz = random_value(0, 0.5);
-                    sphere_material = make_shared<metal>(albedo, fuzz);
-                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
-                } else {
-                    // glass
-                    sphere_material = make_shared<dielectric>(1.5);
-                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
-                }
-            }
+			/* Weight using the power heuristic */
+			fType weight = mix_weight(light_pdf, bsdfPdf);
+            ret += direct * bsdfVal * weight;
         }
     }
 
-    auto material1 = make_shared<dielectric>(1.5);
-    world.add(make_shared<sphere>(point3(0, 1, 0), 1.0, material1));
+	//sample indirect illumination
+    scatter_record srec;
+    if (!bsdf->scatter(r.direction, rec, srec) || srec.pdf_value < 1e-6)
+        return ret;
 
-    auto material2 = make_shared<lambertian>(color(0.4, 0.2, 0.1));
-    world.add(make_shared<sphere>(point3(-4, 1, 0), 1.0, material2));
+    //TODO Prevent light leaks due to the use of shading normals
 
-    auto material3 = make_shared<metal>(color(0.7, 0.6, 0.5), 0.0);
-    world.add(make_shared<sphere>(point3(4, 1, 0), 1.0, material3));
+    /* Russian roulette: try to keep path weights equal to one,
+	   while accounting for the solid angle compression at refractive
+	   index boundaries. Stop with at least some probability to avoid
+	   getting stuck (e.g. due to total internal reflection) */
+    fType rr_weight = 1.0;
+    if (depth >= rr_depth)
+    {
+        //TODO rr = std::min(throughput.max() * eta * eta, 0.95);
+        fType rr = 0.618;
+        if (random_value() > rr)
+            return ret;
 
-    return world;
-}
+        rr_weight = 1.0 / rr;
+    }
 
-hittable_list cornell_box()
-{
-    hittable_list objects;
-
-    auto red   = make_shared<lambertian>(color(.65, .05, .05));
-    auto white = make_shared<lambertian>(color(.73, .73, .73));
-    auto green = make_shared<lambertian>(color(.12, .45, .15));
-    auto light = make_shared<diffuse_light>(color(15, 15, 15));
-
-    objects.add(make_shared<yz_rect>(0, 555, 0, 555, 555, green));
-    objects.add(make_shared<yz_rect>(0, 555, 0, 555, 0, red));
-    //objects.add(make_shared<xz_rect>(213, 343, 227, 332, 554, light));
-    objects.add(make_shared<flip_face>(make_shared<xz_rect>(213, 343, 227, 332, 554, light)));
-    objects.add(make_shared<xz_rect>(0, 555, 0, 555, 0, white));
-    objects.add(make_shared<xz_rect>(0, 555, 0, 555, 555, white));
-    objects.add(make_shared<xy_rect>(0, 555, 0, 555, 555, white));
-
-//    shared_ptr<material> aluminum = make_shared<metal>(color(0.8, 0.85, 0.88), 0.0);
-//    shared_ptr<hittable> box1 = make_shared<box>(point3(0,0,0), point3(165,330,165), aluminum);
-    shared_ptr<hittable> box1 = make_shared<box>(point3(0, 0, 0), point3(165, 330, 165), white);
-    box1 = make_shared<rotate_y>(box1, 15);
-    box1 = make_shared<translate>(box1, vec3(265,0,295));
-    objects.add(box1);
-
-//    shared_ptr<hittable> box2 = make_shared<box>(point3(0,0,0), point3(165,165,165), white);
-//    box2 = make_shared<rotate_y>(box2, -18);
-//    box2 = make_shared<translate>(box2, vec3(130,0,65));
-//    objects.add(box2);
-    
-    auto glass = make_shared<dielectric>(1.5);
-    objects.add(make_shared<sphere>(point3(190,90,190), 90 , glass));
-    
-    return objects;
+    color indirect = rr_weight * srec.attenuation * ray_color(srec.scatter_ray, scene, depth + 1, srec.pdf_value) / srec.pdf_value;
+    return ret + indirect;
 }
 
 int main(int argc, const char * argv[])
 {
     //image
-    fType aspect_ratio = 16.0 / 9.0;
-    int image_width = 400;
-    int image_height = static_cast<int>(image_width / aspect_ratio);
-    int samples_per_pixel = 100;
-    int max_bounce = 50;
-    
-    //world
-    hittable_list world;
-    color background(0,0,0);
-    
-    //lights
-    auto lights = make_shared<hittable_list>();
-    lights->add(make_shared<xz_rect>(213, 343, 227, 332, 554, nullptr));
-    //lights->add(make_shared<sphere>(point3(190, 90, 190), 90, nullptr));
-    
+    fType aspect_ratio;
+    int image_width, image_height;
+
     point3 lookfrom;
     point3 lookat;
 	vec3 vup(0, 1, 0);
@@ -172,157 +124,79 @@ int main(int argc, const char * argv[])
     fType aperture = 0.0;
     fType dist_to_focus = 1.0;
     
-    switch (5)
+	//scene
+	Scene scene;
+    std::string model_path = resource_dir + "/" + model_name + "/" + model_name + ".obj";
+	std::string xml_path = resource_dir + "/" + model_name + "/" + model_name + ".xml";
+
+	tinyxml2::XMLDocument doc;
+	doc.LoadFile(xml_path.c_str());
+    if (doc.Error())
     {
-        case 1:
-        {
-            //auto material_ground = make_shared<lambertian>(color(0.8, 0.8, 0.0));
-            auto checker = make_shared<checker_texture>(color(0.2, 0.3, 0.1), color(0.9, 0.9, 0.9));
-            auto material_ground = make_shared<lambertian>(checker);
-            auto material_center = make_shared<lambertian>(color(0.1, 0.2, 0.5));
-            auto material_left   = make_shared<dielectric>(1.5);
-            auto material_right  = make_shared<metal>(color(0.8, 0.6, 0.2), 0.0);
-
-            world.add(make_shared<sphere>(point3( 0.0, -100.5, -1.0), 100.0, material_ground));
-            world.add(make_shared<sphere>(point3( 0.0,    0.0, -1.0),   0.5, material_center));
-            world.add(make_shared<sphere>(point3(-1.0,    0.0, -1.0),   0.5, material_left));
-            //the geometry is unaffected, but the surface normal points inward
-            world.add(make_shared<sphere>(point3(-1.0,    0.0, -1.0),  -0.45, material_left));
-            world.add(make_shared<sphere>(point3( 1.0,    0.0, -1.0),   0.5, material_right));
-            
-            background = color(0.70, 0.80, 1.00);
-            
-            lookfrom = point3(-2,2,1);
-            lookat = point3(0,0,-1);
-            vfov = 20.0;
-            break;
-        }
-
-        case 2:
-        {
-            world = random_scene();
-            background = color(0.70, 0.80, 1.00);
-            lookfrom = point3(13,2,3);
-            lookat = point3(0,0,0);
-            vfov = 20.0;
-            aperture = 0.1;
-            dist_to_focus = 10.0;
-            break;
-        }
-
-        case 3:
-        {
-            auto checker = make_shared<checker_texture>(color(0.2, 0.3, 0.1), color(0.9, 0.9, 0.9));
-            auto material_ground = make_shared<lambertian>(checker);
-            world.add(make_shared<sphere>(point3( 0.0, -100, -1.0), 100.0, material_ground));
-            
-            auto earth_texture = make_shared<image_texture>("earthmap.jpg");
-            auto earth_surface = make_shared<lambertian>(earth_texture);
-            auto globe = make_shared<sphere>(point3(0,2,0), 2, earth_surface);
-            world.add(globe);
-            
-            auto difflight = make_shared<diffuse_light>(color(4,4,4));
-            world.add(make_shared<xy_rect>(3, 5, 1, 3, -2, difflight));
-            
-            lookfrom = point3(26,3,6);
-            lookat = point3(0,2,0);
-            vfov = 20.0;
-            
-            samples_per_pixel = 400;
-            
-            break;
-        }
-        
-        case 4:
-        {
-            world = cornell_box();
-            aspect_ratio = 1.0;
-            image_width = 256;
-            image_height = static_cast<int>(image_width / aspect_ratio);
-            samples_per_pixel = 1000;
-            background = color(0,0,0);
-            lookfrom = point3(278, 278, -800);
-            lookat = point3(278, 278, 0);
-            vfov = 40.0;
-            break;
-        }
-        
-        case 5:
-        {
-            std::string model_path = "resource/veach-mis/veach-mis.obj";
-            shared_ptr<model> model_ptr = make_shared<model>(model_path);
-
-			tinyxml2::XMLDocument doc;
-            std::string xml_path = model_ptr->file_dir + model_ptr->file_name + ".xml";
-			doc.LoadFile(xml_path.c_str());
-
-            if (doc.Error())
-            {
-                WARN("error occur when parsing %s, info: [line %d]%s", xml_path.c_str(), doc.ErrorLineNum(), doc.ErrorStr());
-                exit(1);
-            }
-
-            tinyxml2::XMLElement* camera_node = doc.FirstChildElement("camera");
-
-#define PARSE_VECTOR3(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f,%f,%f", &output[0], &output[1], &output[2])
-#ifdef USE_FP32
-#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f", &output)
-#else
-#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%d", &output)
-#endif
-#define PARSE_INT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%d", &output)
-
-            if (
-				PARSE_VECTOR3(camera_node, "eye", lookfrom) != 3 ||
-				PARSE_VECTOR3(camera_node, "lookat", lookat) != 3 ||
-				PARSE_VECTOR3(camera_node, "up", vup) != 3 ||
-				PARSE_VECTOR3(camera_node, "lookat", lookat) != 3 ||
-				PARSE_FLOAT(camera_node, "up", vfov) != 1 ||
-                PARSE_INT(camera_node, "width", image_width) != 1 ||
-                PARSE_INT(camera_node, "height", image_height) != 1
-                )
-            {
-				WARN("error occur when parsing camera params");
-				exit(1);
-            }
-
-            //TODO
-            //load lights
-
-
-            aspect_ratio = static_cast<fType>(image_width) / static_cast<fType>(image_height);
-            samples_per_pixel = 10;
-        }
-
-        default:
-            break;
+        WARN("error occur when parsing %s, info: [line %d]%s", xml_path.c_str(), doc.ErrorLineNum(), doc.ErrorStr());
+        exit(1);
     }
-    
-    //bvh_node world_wrapper(world);
-    
+
+    tinyxml2::XMLElement* camera_node = doc.FirstChildElement("camera");
+    if (PARSE_VECTOR3(camera_node, "eye", lookfrom) != 3
+        || PARSE_VECTOR3(camera_node, "lookat", lookat) != 3
+        || PARSE_VECTOR3(camera_node, "up", vup) != 3
+        || PARSE_VECTOR3(camera_node, "lookat", lookat) != 3
+        || PARSE_FLOAT(camera_node, "fovy", vfov) != 1
+        || PARSE_INT(camera_node, "width", image_width) != 1
+        || PARSE_INT(camera_node, "height", image_height) != 1)
+    {
+		WARN("error occur when parsing camera params");
+		exit(1);
+    }
+
+    std::map<std::string, vec3> matname2radiance;
+    tinyxml2::XMLElement* light_node = doc.FirstChildElement("light");
+    while (light_node)
+    {
+        vec3 radiance;
+        std::string mat_name(light_node->Attribute("mtlname"));
+        if(mat_name.empty() || PARSE_RADIANCE(light_node, radiance) != 3)
+		{
+			WARN("error occur when parsing light params");
+			exit(1);
+		}
+
+        matname2radiance.insert(std::make_pair(mat_name, radiance));
+        light_node = light_node->NextSiblingElement("light");
+    }
+
+	doc.Clear();
+
+    aspect_ratio = static_cast<fType>(image_width) / static_cast<fType>(image_height);
+
+	//lights
+	scene.lights = make_shared<hittable_list>();
+	shared_ptr<model> model_ptr = make_shared<model>();
+    if (!model_ptr->loadObj(model_path, scene.lights, matname2radiance))
+        exit(1);
+
+    scene.add_model(model_ptr);
+    scene.init();
+
     //camera
     camera cam(lookfrom, lookat, vup, vfov, aspect_ratio, aperture, dist_to_focus);
     
-    //output image
-#ifdef OUTPUT_EXR
-    const char* output_path = "image.exr";
+    //output exr
+    std::string output_file = model_name + "_" + std::to_string(samples_per_pixel) + ".exr";
     int output_size = image_width * image_height * 3;
     float* output = new float[output_size];
-#else
-    std::ofstream output("image.ppm");
-    if(!output.is_open())
-    {
-        std::cerr << "write output file failed." << std::endl;
-        return -1;
-    }
-    output << "P3\n" << image_width << ' ' << image_height << "\n255\n";
-#endif
-    clock_t start_time = clock();
-    
+
     //render
+    fType sample_scale = 1.0 / samples_per_pixel;
+    int total_samples = image_width * image_height * samples_per_pixel;
+    int current_samples = 0;
+
+    clock_t start_time = clock();
+
+#pragma omp parallel for
     for(int y = image_height - 1; y >= 0; y--)
     {
-        std::cerr << "\rScanlines remaining: " << y << ' ' << std::flush;
         for(int x = 0; x < image_width; x++)
         {
             color pixel_color(0, 0, 0);
@@ -332,29 +206,42 @@ int main(int argc, const char * argv[])
                 fType v = (y + random_value()) / (image_height - 1);
                 
                 ray r = cam.get_ray(u, v);
-                pixel_color += ray_color(r, background, world, lights, max_bounce);
+                pixel_color += ray_color(r, scene, 0);
+                current_samples++;
             }
-#ifdef OUTPUT_EXR
             int flip_y = image_height - 1 - y;
             int index = 3 * (flip_y * image_width + x);
-            write_color(output, pixel_color, index, samples_per_pixel);
-#else
-            write_color(output, pixel_color, samples_per_pixel);
-#endif
+
+            //write color
+			fType r = sample_scale * pixel_color.r;
+			fType g = sample_scale * pixel_color.g;
+			fType b = sample_scale * pixel_color.b;
+
+			// Divide the color by the number of samples and gamma-correct for gamma = 2.0
+            if (gamma_correct)
+            {
+				fType gamma = 1.0 / 2.2;
+				r = std::pow(r, gamma);
+				g = std::pow(g, gamma);
+				b = std::pow(b, gamma);
+            }
+
+            output[index + 0] = static_cast<float>(r);
+            output[index + 1] = static_cast<float>(g);
+            output[index + 2] = static_cast<float>(b);
         }
+        printf("\rrendering %%%.2f...", 100.0f * (float)current_samples / total_samples);
     }
 
-#ifdef OUTPUT_EXR
+    printf("\rrendering %%%.2f...", 100.0f);
+
     const char* err;
-    int ret = SaveEXR(output, image_width, image_height, 3, false, output_path, &err);
-    std::cerr << "\nwriting to exr, ret = " << ret;
+    int ret = SaveEXR(output, image_width, image_height, 3, false, output_file.c_str(), &err);
+    std::cerr << "\nwriting to " << output_file << ", ret = " << ret;
     if(ret < 0)
         std::cerr << ", error info: " << err;
 
     delete[] output;
-#else
-    output.close();
-#endif
 
     clock_t finish_time = clock();
     double seconds = (finish_time - start_time) / CLOCKS_PER_SEC;

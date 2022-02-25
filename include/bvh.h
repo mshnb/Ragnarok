@@ -17,11 +17,10 @@
 class bvh_node : public hittable
 {
 public:
-    bvh_node();
-    bvh_node(const hittable_list& list):bvh_node(list.objects, 0, list.objects.size()) {}
+	bvh_node(const std::vector<shared_ptr<hittable>>& src_objects) : bvh_node(src_objects, 0, src_objects.size()) {}
     bvh_node(const std::vector<shared_ptr<hittable>>& src_objects,size_t start, size_t end);
 
-    virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const override;
+    virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
     
 public:
     shared_ptr<hittable> left;
@@ -33,11 +32,10 @@ inline bool box_compare(const shared_ptr<hittable> a, const shared_ptr<hittable>
     shared_ptr<aabb> box_a = a->bounding_box();
 	shared_ptr<aabb> box_b = b->bounding_box();
 
-
     if (!box_a || !box_b)
         std::cerr << "No bounding box in bvh_node constructor.\n";
 
-    return box_a->min().e[axis] < box_b->min().e[axis];
+    return box_a->min()[axis] < box_b->min()[axis];
 }
 
 bool box_x_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
@@ -55,13 +53,13 @@ bool box_z_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
     return box_compare(a, b, 2);
 }
 
-bool bvh_node::hit(const ray& r, fType t_min, fType t_max, hit_record& rec) const
+bool bvh_node::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
 {
     if (!aabb_ptr->hit(r, t_min, t_max))
         return false;
 
-    bool hit_left = left->hit(r, t_min, t_max, rec);
-    bool hit_right = right->hit(r, t_min, hit_left ? rec.t : t_max, rec);
+    bool hit_left = left->hit(r, t_min, t_max, cache);
+    bool hit_right = right->hit(r, t_min, hit_left ? cache.t : t_max, cache);
     return hit_left || hit_right;
 }
 
@@ -75,7 +73,6 @@ bvh_node::bvh_node(const std::vector<shared_ptr<hittable>>& src_objects, size_t 
                                   : box_z_compare;
 
     size_t object_span = end - start;
-
     if (object_span == 1)
         left = right = objects[start];
     else if (object_span == 2)
@@ -94,8 +91,7 @@ bvh_node::bvh_node(const std::vector<shared_ptr<hittable>>& src_objects, size_t 
     else
     {
         std::sort(objects.begin() + start, objects.begin() + end, comparator);
-
-        auto mid = start + object_span/2;
+        auto mid = start + object_span / 2;
         left = make_shared<bvh_node>(objects, start, mid);
         right = make_shared<bvh_node>(objects, mid, end);
     }

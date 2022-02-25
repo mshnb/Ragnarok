@@ -13,6 +13,8 @@
 #include <memory>
 #include <cstdlib>
 
+#define USE_FP32
+
 #ifdef _MSC_VER
 #define FN_NAME __FUNCTION__
 #else
@@ -26,8 +28,18 @@
 
 #define CHECK(status) if(status!=0){ERROR("check failed with err .\n", status);}
 
-#define USE_FP32
-#define OUTPUT_EXR
+//parse xml
+#define PARSE_VECTOR3(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f,%f,%f", &output[0], &output[1], &output[2])
+
+#ifdef USE_FP32
+#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%f", &output)
+#define PARSE_RADIANCE(element, output) sscanf_s(element->Attribute("radiance"), "%f,%f,%f", &output[0], &output[1], &output[2])
+#else
+#define PARSE_FLOAT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%lf", &output)
+#define PARSE_RADIANCE(element, output) sscanf_s(element->Attribute("radiance"), "%lf,%lf,%lf", &output[0], &output[1], &output[2])
+#endif
+
+#define PARSE_INT(element, att_name, output) sscanf_s(element->FirstChildElement(att_name)->Attribute("value"), "%d", &output)
 
 // Usings
 using std::shared_ptr;
@@ -42,12 +54,18 @@ using fType = double;
 
 // Constants
 const fType infinity = std::numeric_limits<fType>::infinity();
-const fType pi = 3.1415926535897932385;
+const fType PI = 3.1415926535897932385;
+const fType INV_PI = 1 / PI;
+const fType INV_TWOPI = INV_PI / 2;
+
+const fType Epsilon = 1e-4;
+
+const bool ensureEnergyConservation = true;
 
 // Utility Functions
 inline fType degrees_to_radians(fType degrees)
 {
-    return degrees * pi / 180.0;
+    return degrees * PI / 180.0;
 }
 
 inline fType clamp(fType x, fType min, fType max)
@@ -91,19 +109,12 @@ inline int random_int(int min, int max)
 #endif
 }
 
-bool file_exists(const char* abs_filename) 
+// using the power heuristic
+inline fType mix_weight(fType pdfA, fType pdfB) 
 {
-	bool ret;
-	FILE* fp = fopen(abs_filename, "rb");
-	if (fp) 
-    {
-		ret = true;
-		fclose(fp);
-	}
-	else 
-		ret = false;
-
-	return ret;
+	pdfA *= pdfA;
+	pdfB *= pdfB;
+	return pdfA / (pdfA + pdfB);
 }
 
 #endif /* common_h */
