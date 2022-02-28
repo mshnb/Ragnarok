@@ -25,7 +25,7 @@
 #include <time.h>
 #include <omp.h>
 
-std::string model_name = "bedroom"; // "cornell-box"
+std::string model_name = "cornell-box";
 std::string resource_dir = "../resource";
 
 int samples_per_pixel = 128;
