@@ -114,7 +114,7 @@ class dielectric : public material
                 /* Radiance must be scaled to account for the solid angle compression
                    that occurs when crossing the interface. */
                 fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
-                return color(factor * factor * (1.0 - fresnel));// factor * factor *(1.0 - fresnel)
+                return color(factor * factor * (1.0 - fresnel));
             }
 		}
 
@@ -158,7 +158,7 @@ class dielectric : public material
             {
 				//reflect
                 wo = vec3(-wi.x, wi.y, -wi.z);
-                srec.attenuation.assign(1);
+                srec.attenuation.assign(fresnel);
 				srec.pdf_value = fresnel;
             }
             else 
@@ -169,7 +169,7 @@ class dielectric : public material
                 /* Radiance must be scaled to account for the solid angle compression
                     that occurs when crossing the interface. */
                 fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
-                srec.attenuation.assign(factor * factor);
+                srec.attenuation.assign(factor * factor * (1.0 - fresnel));
 				srec.pdf_value = 1.0 - fresnel;
             }
 
