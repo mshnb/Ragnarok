@@ -23,6 +23,12 @@ public:
 		y = values[1];
 	}
 
+	void assign(fType value)
+	{
+		x = value;
+		y = value;
+	}
+
 	fType operator[] (int i) const 
 	{
 		switch (i)

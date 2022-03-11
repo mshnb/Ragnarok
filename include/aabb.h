@@ -13,13 +13,15 @@
 class aabb
 {
 public:
-    aabb() {}
+    aabb() : minimum(std::numeric_limits<fType>::max()), maximum(-std::numeric_limits<fType>::max()) {}
 	aabb(const shared_ptr<aabb> box): minimum(box->min()), maximum(box->max()) {}
     aabb(const point3& a, const point3& b): minimum(a), maximum(b) {}
     
     inline point3 min() const { return minimum; }
     inline point3 max() const { return maximum; }
     
+    inline vec3 size() const { return maximum - minimum; }
+
     void reset(const point3& a, const point3& b)
     {
         minimum = a;
@@ -93,6 +95,16 @@ public:
             minimum[i] = std::min(minimum[i], p[i]);
             maximum[i] = std::max(maximum[i], p[i]);
         }
+	}
+
+
+	void extand(shared_ptr<aabb> box)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			minimum[i] = std::min(minimum[i], box->minimum[i]);
+			maximum[i] = std::max(maximum[i], box->maximum[i]);
+		}
 	}
 
 public:

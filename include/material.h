@@ -113,8 +113,8 @@ class dielectric : public material
 
                 /* Radiance must be scaled to account for the solid angle compression
                    that occurs when crossing the interface. */
-                fType factor = cosThetaT < 0 ? 1.0 / ior : ior;
-                return factor * factor * (1.0 - fresnel);
+                fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
+                return color(factor * factor * (1.0 - fresnel));// factor * factor *(1.0 - fresnel)
             }
 		}
 
@@ -149,8 +149,6 @@ class dielectric : public material
         {
 			onb shadingFrame(rec.normal);
 			vec3 wi = -shadingFrame.local(in_dir);
-			if (wi.y < 1e-6)
-				return false;
 
 			fType cosThetaT;
 			fType fresnel = fresnelDielectric(wi.y, cosThetaT, ior);
@@ -158,27 +156,22 @@ class dielectric : public material
 
             if (random_value() <= fresnel) 
             {
-//                     bRec.sampledComponent = 0;
-//                     bRec.sampledType = EDeltaReflection;
+				//reflect
                 wo = vec3(-wi.x, wi.y, -wi.z);
-                srec.attenuation.assign(1, 1, 1);
+                srec.attenuation.assign(1);
 				srec.pdf_value = fresnel;
             }
             else 
             {
-//                     bRec.sampledComponent = 1;
-//                     bRec.sampledType = EDeltaTransmission;
+                //refract
                 wo = refract(wi, cosThetaT);
-                //bRec.eta = cosThetaT < 0 ? ior : 1.0 / ior;
+
                 /* Radiance must be scaled to account for the solid angle compression
                     that occurs when crossing the interface. */
-                fType factor = cosThetaT < 0 ? 1.0 / ior : ior;
+                fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
                 srec.attenuation.assign(factor * factor);
 				srec.pdf_value = 1.0 - fresnel;
             }
-
-			if (wo.y < 1e-6)
-				return false;
 
 			srec.scatter_ray = ray(rec.p, shadingFrame.world(wo));
             return true;
@@ -187,7 +180,7 @@ class dielectric : public material
     private:
 		inline vec3 refract(const vec3& wi, fType cosThetaT) const 
         {
-			fType scale = -(cosThetaT < 0 ? 1.0 / ior : ior);
+			fType scale = -(cosThetaT < 0 ? (1.0 / ior) : ior);
 			return vec3(scale * wi.x, cosThetaT, scale * wi.z);
 		}
 
@@ -201,8 +194,8 @@ class dielectric : public material
 
             /* Using Snell's law, calculate the squared sine of the
                angle between the normal and the transmitted ray */
-            fType scale = (cosThetaI_ > 0) ? 1 / eta : eta,
-                cosThetaTSqr = 1 - (1 - cosThetaI_ * cosThetaI_) * (scale * scale);
+            fType scale = cosThetaI_ > 0 ? (1 / eta) : eta;
+            fType cosThetaTSqr = 1 - (1 - cosThetaI_ * cosThetaI_) * (scale * scale);
 
             /* Check for total internal reflection */
             if (cosThetaTSqr <= 0.0) 
@@ -215,23 +208,13 @@ class dielectric : public material
             fType cosThetaI = std::abs(cosThetaI_);
             fType cosThetaT = std::sqrt(cosThetaTSqr);
 
-            fType Rs = (cosThetaI - eta * cosThetaT)
-                / (cosThetaI + eta * cosThetaT);
-            fType Rp = (eta * cosThetaI - cosThetaT)
-                / (eta * cosThetaI + cosThetaT);
+            fType Rs = (cosThetaI - eta * cosThetaT) / (cosThetaI + eta * cosThetaT);
+            fType Rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
 
             cosThetaT_ = (cosThetaI_ > 0) ? -cosThetaT : cosThetaT;
 
             /* No polarization -- return the unpolarized reflectance */
             return 0.5 * (Rs * Rs + Rp * Rp);
-        }
-
-        static fType reflectance(fType cosine, fType ref_idx)
-        {
-            // Use Schlick's approximation for reflectance.
-            fType r0 = (1-ref_idx) / (1+ref_idx);
-            r0 = r0*r0;
-            return r0 + (1-r0)*pow((1 - cosine),5);
         }
     
     public:
@@ -297,7 +280,7 @@ public:
             vec3 wi_r(-wi.x, wi.y, -wi.z);
             fType alpha = dot(wo, wi_r);
 			if (alpha > 0)
-				result += specular->value(rec.uv, rec.p) * ((shiness + 2) * INV_TWOPI * std::pow(alpha, shiness));
+				result += specular->value(rec.uv, rec.p) * (shiness + 2) * INV_TWOPI * std::pow(alpha, shiness);
 		}
 
 		if (hasDiffuse)
@@ -321,7 +304,7 @@ public:
             vec3 wi_r(-wi.x, wi.y, -wi.z);
             fType alpha = dot(wo, wi_r);
 			if (alpha > 0)
-				specProb = std::pow(alpha, shiness) * (shiness + 1.0) * INV_TWOPI;
+				specProb = (fType)std::pow(alpha, shiness) * (shiness + 1.0) * INV_TWOPI;
 		}
 
 		if (hasDiffuse)
@@ -339,6 +322,11 @@ public:
 
 	virtual bool scatter(const vec3& in_dir, const hit_record& rec, scatter_record& srec) const override
 	{
+		onb shadingFrame(rec.normal);
+		vec3 wi = -shadingFrame.local(in_dir);
+		if (wi.y < 1e-6)
+			return false;
+
 		vec2 sample = vec2::random();
 
 		bool choseSpecular = true;
@@ -351,11 +339,6 @@ public:
 			sample.x = (sample.x - specularSamplingWeight) / diffuseSamplingWeight;
 			choseSpecular = false;
 		}
-
-		onb shadingFrame(rec.normal);
-		vec3 wi = -shadingFrame.local(in_dir);
-		if (wi.y < 1e-6)
-			return false;
 
 		vec3 wo;
 		if (choseSpecular)

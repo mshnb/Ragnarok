@@ -25,7 +25,7 @@ class triangle : public hittable
 public:
 	triangle()
 	{
-		aabb_ptr = make_shared<aabb>(std::numeric_limits<fType>::max(), -std::numeric_limits<fType>::max());
+		aabb_ptr = make_shared<aabb>();
 
 	}
 

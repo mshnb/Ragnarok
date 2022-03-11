@@ -91,10 +91,7 @@ color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
 
     //TODO Prevent light leaks due to the use of shading normals
 
-    /* Russian roulette: try to keep path weights equal to one,
-	   while accounting for the solid angle compression at refractive
-	   index boundaries. Stop with at least some probability to avoid
-	   getting stuck (e.g. due to total internal reflection) */
+    // Russian roulette
     fType rr_weight = 1.0;
     if (depth >= rr_depth)
     {
@@ -204,7 +201,7 @@ int main(int argc, const char * argv[])
             {
                 fType u = (x + random_value()) / (image_width - 1);
                 fType v = (y + random_value()) / (image_height - 1);
-                
+
                 ray r = cam.get_ray(u, v);
                 pixel_color += ray_color(r, scene, 0);
                 current_samples++;
@@ -230,10 +227,10 @@ int main(int argc, const char * argv[])
             output[index + 1] = static_cast<float>(g);
             output[index + 2] = static_cast<float>(b);
         }
-        printf("\rrendering %%%.2f...", 100.0f * (float)current_samples / total_samples);
+        printf("\rrendering %.2f%%...", 100.0f * (float)current_samples / total_samples);
     }
 
-    printf("\rrendering %%%.2f...", 100.0f);
+    printf("\rrendering %.2f%%...", 100.0f);
 
     const char* err;
     int ret = SaveEXR(output, image_width, image_height, 3, false, output_file.c_str(), &err);

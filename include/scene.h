@@ -49,12 +49,13 @@ public:
 		//buid bvh
 		clock_t start_time = clock();
 		printf("building bvh...\n");
-		bvh_root = make_shared<bvh_node>(temp_hittable_list);
+		//bvh_root = make_shared<bvh_node>(temp_hittable_list);
+		bvh_root = make_shared<bvh>(temp_hittable_list);
 		temp_hittable_list.swap(std::vector<shared_ptr<hittable>> ());
 
 		clock_t finish_time = clock();
-		double seconds = (finish_time - start_time) / CLOCKS_PER_SEC;
-		printf("building bvh end in %ds.\n", static_cast<int>(seconds));
+		double seconds = (double)(finish_time - start_time) / CLOCKS_PER_SEC;
+		printf("building bvh end in %.4fs.\n", static_cast<float>(seconds));
 
 		//build lights cdf
 		int lightCount = lights->objects.size();
@@ -124,7 +125,7 @@ private:
 	std::vector<shared_ptr<hittable>> shapes;
 	std::vector<bool> triangleFlag;
 
-	shared_ptr<bvh_node> bvh_root;
+	shared_ptr<bvh> bvh_root;
 
 	//used for sampling lights
 	shared_ptr<cdf> m_cdf;

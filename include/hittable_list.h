@@ -22,7 +22,7 @@ class hittable_list : public hittable
 public:
     hittable_list() 
     {
-        aabb_ptr = make_shared<aabb>(std::numeric_limits<fType>::max(), -std::numeric_limits<fType>::max());
+        aabb_ptr = make_shared<aabb>();
     }
 
     hittable_list(shared_ptr<hittable> object) { add(object); }

@@ -8,102 +8,198 @@
 #ifndef bvh_h
 #define bvh_h
 
+#include <queue>
+#include <stack>
 #include <algorithm>
 
 #include "common.h"
 #include "hittable.h"
-#include "hittable_list.h"
 
-class bvh_node : public hittable
+struct bvh_node
 {
-public:
-	bvh_node(const std::vector<shared_ptr<hittable>>& src_objects) : bvh_node(src_objects, 0, src_objects.size()) {}
-    bvh_node(const std::vector<shared_ptr<hittable>>& src_objects,size_t start, size_t end);
+    aabb bounding;
+    bvh_node *left, *right;
+	uint32_t start = 0, end = 0;
 
-    virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
-    
-public:
-    shared_ptr<hittable> left;
-    shared_ptr<hittable> right;
+	inline bool is_leaf() const 
+	{
+		return left == nullptr && right == nullptr;
+	}
 };
 
-inline bool box_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b, int axis)
+// triangle used in building bvh
+struct building_node
 {
-    shared_ptr<aabb> box_a = a->bounding_box();
-	shared_ptr<aabb> box_b = b->bounding_box();
+	shared_ptr<hittable> shape_ptr;
+	shared_ptr<aabb> bound_ptr;
+	vec3 center;
+};
 
-    if (!box_a || !box_b)
-        std::cerr << "No bounding box in bvh_node constructor.\n";
-
-    return box_a->min()[axis] < box_b->min()[axis];
-}
-
-bool box_x_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
+class bvh : public hittable
 {
-    return box_compare(a, b, 0);
-}
-
-bool box_y_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
-{
-    return box_compare(a, b, 1);
-}
-
-bool box_z_compare(const shared_ptr<hittable> a, const shared_ptr<hittable> b)
-{
-    return box_compare(a, b, 2);
-}
-
-bool bvh_node::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
-{
-    if (!aabb_ptr->hit(r, t_min, t_max))
-        return false;
-
-    bool hit_left = left->hit(r, t_min, t_max, cache);
-    bool hit_right = right->hit(r, t_min, hit_left ? cache.t : t_max, cache);
-    return hit_left || hit_right;
-}
-
-bvh_node::bvh_node(const std::vector<shared_ptr<hittable>>& src_objects, size_t start, size_t end)
-{
-    auto objects = src_objects; // Create a modifiable array of the source scene objects
-
-    int axis = random_int(0,2);
-    auto comparator = (axis == 0) ? box_x_compare
-                    : (axis == 1) ? box_y_compare
-                                  : box_z_compare;
-
-    size_t object_span = end - start;
-    if (object_span == 1)
-        left = right = objects[start];
-    else if (object_span == 2)
+public:
+    bvh(const std::vector<shared_ptr<hittable>>& src_objects) 
     {
-        if (comparator(objects[start], objects[start+1]))
-        {
-            left = objects[start];
-            right = objects[start+1];
-        }
-        else
-        {
-            left = objects[start+1];
-            right = objects[start];
-        }
-    }
-    else
-    {
-        std::sort(objects.begin() + start, objects.begin() + end, comparator);
-        auto mid = start + object_span / 2;
-        left = make_shared<bvh_node>(objects, start, mid);
-        right = make_shared<bvh_node>(objects, mid, end);
+        //aabb_ptr = make_shared<aabb>();
+
+        int obj_count = src_objects.size();
+		std::vector<building_node> build_nodes(obj_count);
+		for (uint32_t i = 0; i < obj_count; ++i)
+		{
+            auto& build_node = build_nodes[i];
+			build_node.shape_ptr = src_objects[i];
+			build_node.bound_ptr = src_objects[i]->bounding_box();
+			build_node.center = (build_node.bound_ptr->max() + build_node.bound_ptr->min()) * 0.5;
+            //aabb_ptr->extand(build_shape.bound_ptr);
+		}
+
+		const uint32_t leaf_capacity = 8;
+		build_bvh(build_nodes, leaf_capacity);
+
+		shape_ptrs.reserve(obj_count);
+		for (auto bs : build_nodes)
+			shape_ptrs.push_back(bs.shape_ptr);
     }
 
-    shared_ptr<aabb> box_left = left->bounding_box();
-    shared_ptr<aabb> box_right = right->bounding_box();
+	virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
 
-    if (!box_left || !box_right)
-        std::cerr << "No bounding box in bvh_node constructor.\n";
+private:
+	std::vector<shared_ptr<hittable>> shape_ptrs;
+	bvh_node* bvh_root = nullptr;
 
-    aabb_ptr = make_shared<aabb>();
-    aabb_ptr->surrounding_box(box_left, box_right);
+	void build_bvh(std::vector<building_node>& shapes, uint32_t leaf_capacity)
+	{
+		struct BuildingTask
+		{
+			bvh_node** fillback;
+			uint32_t start, end;
+			uint32_t depth;
+		};
+
+		std::queue<BuildingTask> tasks;
+		tasks.push({ &bvh_root, 0, (uint32_t)shapes.size(), 0 });
+
+		while (!tasks.empty())
+		{
+			BuildingTask task = tasks.front();
+			tasks.pop();
+
+			aabb all_bound, center_bound;
+			for (int i = task.start; i < task.end; i++)
+			{
+				auto& tri = shapes[i];
+				all_bound.extand(tri.bound_ptr);
+				center_bound.extand(tri.center);
+			}
+
+			// construct leaf node when triangle count is sufficiently low
+			uint32_t tri_num = task.end - task.start;
+			if (tri_num <= leaf_capacity)
+			{
+				//TODO use mem pool
+				auto leaf = new bvh_node();
+
+				leaf->bounding = all_bound;
+				leaf->left = nullptr;
+				leaf->right = nullptr;
+				leaf->start = task.start;
+				leaf->end = task.end;
+
+				*task.fillback = leaf;
+				continue;
+			}
+
+			// split alone the longest axis
+			vec3 center_bound_size = center_bound.size();
+			int split_axis = center_bound_size.x > center_bound_size.y ?
+				(center_bound_size.x > center_bound_size.z ? 0 : 2) :
+				(center_bound_size.y > center_bound_size.z ? 1 : 2);
+
+			uint32_t middle;
+			if (task.depth < 64)
+			{
+				fType split_value = 0.5 * (center_bound.maximum[split_axis] + center_bound.minimum[split_axis]);
+				middle = task.start;
+
+				for (uint32_t i = task.start; i < task.end; i++)
+				{
+					if (shapes[i].center[split_axis] < split_value)
+						std::swap(shapes[i], shapes[middle++]);
+				}
+
+				//bad split
+				if (middle == task.start || middle == task.end)
+					middle = task.start + tri_num / 2;
+			}
+			else
+			{
+				//divide with triangle count when depth is too large
+				std::sort(shapes.begin() + task.start, shapes.begin() + task.end,
+					[axis = split_axis](const building_node& a, const building_node& b)
+					{
+						return a.center[axis] < b.center[axis];
+					});
+				middle = task.start + tri_num / 2;
+			}
+
+			//TODO use mem pool
+			auto interior = new bvh_node();
+			interior->bounding = all_bound;
+			interior->left = nullptr;
+			interior->right = nullptr;
+			interior->start = 0;
+			interior->end = 0;
+
+			*task.fillback = interior;
+
+			tasks.push({ &interior->left, task.start, middle, task.depth + 1 });
+			tasks.push({ &interior->right, middle, task.end, task.depth + 1 });
+		}
+	}
+};
+
+bool bvh::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
+{
+	hit_cache temp_cache;
+	thread_local std::stack<bvh_node*> node_stack;
+	node_stack.push(bvh_root);
+
+	while (!node_stack.empty())
+	{
+		bvh_node* node = node_stack.top();
+		node_stack.pop();
+
+		if (!node || !node->bounding.hit(r, t_min, t_max))
+			continue;
+
+		if (node->is_leaf())
+		{
+			for (uint32_t i = node->start; i < node->end; i++)
+			{
+				shared_ptr<hittable> shape = shape_ptrs[i];
+				if (shape && shape->hit(r, t_min, t_max, temp_cache))
+				{
+					cache = temp_cache;
+					t_max = temp_cache.t;
+				}
+			}
+		}
+		else
+		{
+			bvh_node* left = node->left;
+			if (left && left->bounding.hit(r, t_min, t_max))
+				node_stack.push(left);
+
+			bvh_node* right = node->right;
+			if (right && right->bounding.hit(r, t_min, t_max))
+				node_stack.push(right);
+		}
+	}
+
+	if(cache.t < t_min || cache.t > t_max)
+		return false;
+
+	return true;
 }
 
 #endif /* bvh_h */

@@ -128,9 +128,20 @@ class image_texture : public texture
             if (data == nullptr)
                 return color(0,1,1);
 
+            bool flip_v = true;
+
             // Clamp input texture coordinates to [0,1] x [1,0]
-            fType u = clamp(uv.u, 0.0, 1.0);
-            fType v = clamp(uv.v, 0.0, 1.0);
+            fType u = fmod(uv.u, 1.0f);
+            fType v = fmod(uv.v, 1.0f);
+
+            if (u < 0)
+                u += 1.0;
+
+			if (v < 0)
+				v += 1.0;
+
+            if (flip_v)
+                v = 1.0 - v;
 
             auto i = static_cast<int>(u * width);
             auto j = static_cast<int>(v * height);

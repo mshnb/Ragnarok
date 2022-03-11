@@ -82,7 +82,7 @@ public:
 		loadMaterials(inmaterials, matname2radiance, light_mat_index);
 
 		if (inattrib.normals.size() == 0)
-			WARN("need to regenerate all normals");//TODO
+			WARN("need to regenerate all normals");
 
 		loadMeshes(inattrib, inshapes, light_mat_index, lights);
 
@@ -200,8 +200,6 @@ private:
 	//set up meshes and get bounding box's size
 	bool loadMeshes(tinyobj::attrib_t& attrib, std::vector<tinyobj::shape_t>& shapes, std::vector<int>& light_mat_index, shared_ptr<hittable_list> lights)
 	{
-		bool flip_uv_y = true;
-
 		typedef std::map<Vertex, uint32_t, vertex_key_order> VertexMapType;
 		VertexMapType vertexMap;
 		std::vector<Vertex> vertexBuffer;
@@ -216,6 +214,7 @@ private:
 			if (triangle_count == 0)
 				continue;
 
+			vertexMap.clear();
 			vertexBuffer.clear();
 
 			int current_material_id;
@@ -276,15 +275,11 @@ private:
 					vertex.p.assign(&attrib.vertices[3 * vertexId]);
 					tri_aabb->extand(vertex.p);
 
-					vertex.n.assign(&attrib.normals[3 * normalId]);
+					if (attrib.normals.size() > 0)
+						vertex.n.assign(&attrib.normals[3 * normalId]);
 
-					vertex.uv.assign(&attrib.texcoords[2 * uvId]);
-					if (flip_uv_y)
-						vertex.uv[1] = 1 - vertex.uv[1];
-
-					//modify uv
-					vertex.uv.u = vertex.uv.u - (int)vertex.uv.u;
-					vertex.uv.v = vertex.uv.v - (int)vertex.uv.v;
+					if (attrib.texcoords.size() > 0)
+						vertex.uv.assign(&attrib.texcoords[2 * uvId]);
 
 					VertexMapType::iterator it = vertexMap.find(vertex);
 					if (it != vertexMap.end()) 
@@ -302,12 +297,11 @@ private:
 				mesh_ptr->add(tri);
 			}
 
-			int vertex_count = vertexBuffer.size();
-
 			if (!mesh_ptr)
 				continue;
 
 			//handle the last mesh
+			int vertex_count = vertexBuffer.size();
 			mesh_ptr->vertices.reserve(vertex_count);
 			mesh_ptr->normals.reserve(vertex_count);
 			mesh_ptr->texcoords.reserve(vertex_count);

@@ -58,6 +58,7 @@ const fType PI = 3.1415926535897932385;
 const fType INV_PI = 1 / PI;
 const fType INV_TWOPI = INV_PI / 2;
 
+//TODO set more epsilon for different use
 const fType Epsilon = 1e-4;
 
 const bool ensureEnergyConservation = true;
