@@ -87,64 +87,6 @@ class dielectric : public material
     public:
         dielectric(fType index_of_refraction) : ior(index_of_refraction) {}
 
-        //scatter_type -1:all 0:reflect 1:refract
-		virtual color eval(const hit_record& rec, const vec3& wi, const vec3& wo, int scatter_type = -1) const override
-		{
-            bool sampleReflection = scatter_type == -1 || scatter_type == 0;
-            bool sampleTransmission = scatter_type == -1 || scatter_type == 1;
-
-            fType cosThetaT;
-            fType fresnel = fresnelDielectric(wi.y, cosThetaT, ior);
-
-            if (wi.y * wo.y >= 0) 
-            {
-                vec3 wi_reflect(-wi.x, wi.y, -wi.z);
-                if (!sampleReflection || std::abs(dot(wi_reflect, wo) - 1) > 1e-3)
-                    return color(0.0);
-
-                // assume dielectric material has color white
-                return color(fresnel);
-            }
-            else 
-            {
-                vec3 wi_refract = refract(wi, cosThetaT);
-                if (!sampleTransmission || std::abs(dot(wi_refract, wo) - 1) > 1e-3)
-                    return color(0.0);
-
-                /* Radiance must be scaled to account for the solid angle compression
-                   that occurs when crossing the interface. */
-                fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
-                return color(factor * factor * (1.0 - fresnel));
-            }
-		}
-
-        //scatter_type -1:all 0:reflect 1:refract
-		virtual fType pdf(const hit_record& rec, const vec3& wi, const vec3& wo, int scatter_type = -1) const override
-		{
-			bool sampleReflection = scatter_type == -1 || scatter_type == 0;
-			bool sampleTransmission = scatter_type == -1 || scatter_type == 1;
-
-            fType cosThetaT;
-            fType fresnel = fresnelDielectric(wi.y, cosThetaT, ior);
-
-			if (wi.y * wo.y >= 0)
-            {
-                vec3 wi_reflect(-wi.x, wi.y, -wi.z);
-				if (!sampleReflection || std::abs(dot(wi_reflect, wo) - 1) > 1e-3)
-					return 0.0;
-
-				return sampleTransmission ? fresnel : 1.0;
-			}
-			else 
-            {
-                vec3 wi_refract = refract(wi, cosThetaT);
-				if (!sampleTransmission || std::abs(dot(wi_refract, wo) - 1) > 1e-3)
-					return 0.0;
-
-				return sampleReflection ? (1.0 - fresnel) : 1.0;
-			}
-		}
-
         virtual bool scatter(const vec3& in_dir, const hit_record& rec, scatter_record& srec) const override
         {
 			onb shadingFrame(rec.normal);
@@ -165,7 +107,7 @@ class dielectric : public material
             {
                 //refract
                 wo = refract(wi, cosThetaT);
-
+                //printf("refract:[%.2f, %.2f, %.2f] -> [%.2f, %.2f, %.2f]\n", wi.x, wi.y, wi.z, wo.x, wo.y, wo.z);
                 /* Radiance must be scaled to account for the solid angle compression
                     that occurs when crossing the interface. */
                 fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
@@ -181,7 +123,7 @@ class dielectric : public material
 		inline vec3 refract(const vec3& wi, fType cosThetaT) const 
         {
 			fType scale = -(cosThetaT < 0 ? (1.0 / ior) : ior);
-			return vec3(scale * wi.x, cosThetaT, scale * wi.z);
+			return vec3(scale * wi.x, cosThetaT, scale * wi.z).unit_vector();
 		}
 
         fType fresnelDielectric(fType cosThetaI_, fType& cosThetaT_, fType eta) const
