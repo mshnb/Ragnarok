@@ -56,8 +56,8 @@ color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
         /* Compute the prob. of generating that direction using the
            implemented direct illumination sampling technique */
 		fType light_dir_pdf = scene.pdfLightDirect(rec, r.direction);
-        fType weight = mix_weight(bsdf_pdf, light_dir_pdf);
-        return bsdf->emitted(rec) * weight;
+        fType weight = bsdf_pdf < 1e-6 ? 1.0 : mix_weight(bsdf_pdf, light_dir_pdf);
+        return bsdf->emitted(rec)* weight;
     }   
 
     color ret(0.0);
@@ -69,7 +69,7 @@ color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
     if (!direct.near_zero())
     {
 		onb shadingFrame(rec.normal);
-		vec3 wi = -shadingFrame.local(r.direction);
+		vec3 wi = shadingFrame.local(-r.direction);
         vec3 wo = shadingFrame.local(light_dir);
 
         color bsdfVal = bsdf->eval(rec, wi, wo);
@@ -95,7 +95,6 @@ color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
     fType rr_weight = 1.0;
     if (depth >= rr_depth)
     {
-        //TODO rr = std::min(throughput.max() * eta * eta, 0.95);
         fType rr = 0.618;
         if (random_value() > rr)
             return ret;
@@ -103,7 +102,8 @@ color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
         rr_weight = 1.0 / rr;
     }
 
-    color indirect = rr_weight * srec.attenuation * ray_color(srec.scatter_ray, scene, depth + 1, srec.pdf_value) / srec.pdf_value;
+    fType pdf_value = srec.delta_distributed ? 0.0 : srec.pdf_value;
+    color indirect = rr_weight * srec.attenuation * ray_color(srec.scatter_ray, scene, depth + 1, pdf_value) / srec.pdf_value;
     return ret + indirect;
 }
 
@@ -204,7 +204,6 @@ int main(int argc, const char * argv[])
 
                 ray r = cam.get_ray(u, v);
                 pixel_color += ray_color(r, scene, 0);
-                current_samples++;
             }
             int flip_y = image_height - 1 - y;
             int index = 3 * (flip_y * image_width + x);
@@ -226,6 +225,9 @@ int main(int argc, const char * argv[])
             output[index + 0] = static_cast<float>(r);
             output[index + 1] = static_cast<float>(g);
             output[index + 2] = static_cast<float>(b);
+
+#pragma omp atomic
+            current_samples += samples_per_pixel;
         }
         printf("\rrendering %.2f%%...", 100.0f * (float)current_samples / total_samples);
     }

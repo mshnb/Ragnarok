@@ -56,6 +56,8 @@ struct scatter_record
     ray scatter_ray;
     color attenuation;
     fType pdf_value;
+    // do not mis
+    bool delta_distributed = false;
 };
 
 class material
@@ -90,7 +92,7 @@ class dielectric : public material
         virtual bool scatter(const vec3& in_dir, const hit_record& rec, scatter_record& srec) const override
         {
 			onb shadingFrame(rec.normal);
-			vec3 wi = -shadingFrame.local(in_dir);
+			vec3 wi = shadingFrame.local(-in_dir);
 
 			fType cosThetaT;
 			fType fresnel = fresnelDielectric(wi.y, cosThetaT, ior);
@@ -107,7 +109,6 @@ class dielectric : public material
             {
                 //refract
                 wo = refract(wi, cosThetaT);
-                //printf("refract:[%.2f, %.2f, %.2f] -> [%.2f, %.2f, %.2f]\n", wi.x, wi.y, wi.z, wo.x, wo.y, wo.z);
                 /* Radiance must be scaled to account for the solid angle compression
                     that occurs when crossing the interface. */
                 fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
@@ -116,6 +117,7 @@ class dielectric : public material
             }
 
 			srec.scatter_ray = ray(rec.p, shadingFrame.world(wo));
+            srec.delta_distributed = true;
             return true;
         }
     
