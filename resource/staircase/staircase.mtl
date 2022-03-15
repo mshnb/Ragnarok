@@ -1,0 +1,68 @@
+newmtl Wall
+Kd 0.893289 0.893289 0.893289
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Wood
+Kd 0 0 0
+Ks 0.2 0.2 0.2
+Ns 50
+Ni 1
+map_Kd wood5.jpg
+newmtl Chrome
+Kd 0.4 0.4 0.4
+Ks 0.6 0.6 0.6
+Ns 200
+Ni 1
+newmtl SpotHolder
+Kd 1 1 1
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Metal
+Kd 0.4 0.4 0.4
+Ks 0.6 0.6 0.6
+Ns 500
+Ni 1
+newmtl FloorTiles
+Kd 0 0 0
+Ks 0.6 0.6 0.6
+Ns 12500
+Ni 1
+map_Kd Tiles.jpg
+newmtl Glass
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1.5
+newmtl Wallpaper
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1
+map_Kd Wallpaper.jpg
+newmtl Light0
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Light1
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Light2
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Light3
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1
+newmtl Light4
+Kd 0 0 0
+Ks 0 0 0
+Ns 1
+Ni 1

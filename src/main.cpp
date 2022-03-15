@@ -25,10 +25,10 @@
 #include <time.h>
 #include <omp.h>
 
-std::string model_name = "cornell-box";
+std::string model_name = "staircase";
 std::string resource_dir = "../resource";
 
-int samples_per_pixel = 128;
+int samples_per_pixel = 256;
 
 int max_depth = 10;
 int rr_depth = 3;
@@ -227,9 +227,10 @@ int main(int argc, const char * argv[])
             output[index + 2] = static_cast<float>(b);
 
 #pragma omp atomic
-            current_samples += samples_per_pixel;
+			current_samples += samples_per_pixel;
+
+			printf("\rrendering %.2f%%...", (100.0f * current_samples) / total_samples);
         }
-        printf("\rrendering %.2f%%...", 100.0f * (float)current_samples / total_samples);
     }
 
     printf("\rrendering %.2f%%...", 100.0f);

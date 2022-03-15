@@ -48,6 +48,7 @@ struct hit_record
 class hittable
 {
 public:
+    virtual bool hit_fast(const ray& r, fType t_min, fType t_max) const = 0;
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const = 0;
     virtual shared_ptr<aabb> bounding_box() const
     {

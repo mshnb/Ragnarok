@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<camera type="perspective">
+	<eye value="6.91182, 1.65163, 2.55414"/> 
+	<lookat value="6.011643, 1.65163, 2.118617"/> 
+	<up value="0, 1, 0"/>
+	<fovy value="70"/>
+	<width value="1024"/>
+	<height value="1024"/>
+</camera>
+<light mtlname="Light0" radiance="1.59891, 1.59891, 1.59891"/>
+<light mtlname="Light1" radiance="4.575, 3.59076, 1.54977"/>
+<light mtlname="Light2" radiance="4.575, 3.59076, 1.54977"/>
+<light mtlname="Light3" radiance="3.26581, 3.26581, 3.26581"/>
+<light mtlname="Light4" radiance="1.5, 1.5, 1.5"/>

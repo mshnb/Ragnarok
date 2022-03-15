@@ -14,6 +14,8 @@ class Scene
 {
 public:
 	Scene() : inited(false) {}
+
+	bool intersect_fast(const ray& r, fType t_min, fType t_max) const;
 	bool intersect(const ray& r, hit_record& rec, fType t_min = Epsilon, fType t_max = infinity) const;
 
 	void add_hittable(shared_ptr<hittable> obj)
@@ -46,16 +48,13 @@ public:
 
 	void init()
 	{
+		printf("init scene...\n");
+
 		//buid bvh
 		clock_t start_time = clock();
-		printf("building bvh...\n");
 		//bvh_root = make_shared<bvh_node>(temp_hittable_list);
 		bvh_root = make_shared<bvh>(temp_hittable_list);
 		temp_hittable_list.swap(std::vector<shared_ptr<hittable>> ());
-
-		clock_t finish_time = clock();
-		double seconds = (double)(finish_time - start_time) / CLOCKS_PER_SEC;
-		printf("building bvh end in %.4fs.\n", static_cast<float>(seconds));
 
 		//build lights cdf
 		int lightCount = lights->objects.size();
@@ -73,6 +72,9 @@ public:
 			m_cdf->normalize();
 		}
 
+		clock_t init_end_time = clock();
+		double seconds = (double)(init_end_time - start_time) / CLOCKS_PER_SEC;
+		printf("init finished in %.4fs.\n", static_cast<float>(seconds));
 		inited = true;
 	}
 
@@ -92,9 +94,7 @@ public:
 		{
 			ray r(ori_p, light_dir);
 			fType dist = light_rec.t * (1.0 - Epsilon);
-			//TODO use intersect_fast
-			hit_record temp;
-			if (intersect(r, temp, Epsilon, dist))
+			if (intersect_fast(r, Epsilon, dist))
 				return color(0.0);
 
 			sample_pdf *= light_pdf;
@@ -134,6 +134,14 @@ public:
 	color background;
 	shared_ptr<hittable_list> lights;
 };
+
+bool Scene::intersect_fast(const ray& r, fType t_min, fType t_max) const
+{
+	if (bvh_root->hit_fast(r, t_min, t_max))
+		return true;
+
+	return false;
+}
 
 bool Scene::intersect(const ray& r, hit_record& rec, fType t_min, fType t_max) const
 {

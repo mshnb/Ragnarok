@@ -61,6 +61,7 @@ public:
 			shape_ptrs.push_back(bs.shape_ptr);
     }
 
+	virtual bool hit_fast(const ray& r, fType t_min, fType t_max) const override;
 	virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
 
 private:
@@ -157,6 +158,43 @@ private:
 		}
 	}
 };
+
+bool bvh::hit_fast(const ray& r, fType t_min, fType t_max) const
+{
+	thread_local std::stack<bvh_node*> node_stack;
+	node_stack.push(bvh_root);
+
+	while (!node_stack.empty())
+	{
+		bvh_node* node = node_stack.top();
+		node_stack.pop();
+
+		if (!node || !node->bounding.hit(r, t_min, t_max))
+			continue;
+
+		if (node->is_leaf())
+		{
+			for (uint32_t i = node->start; i < node->end; i++)
+			{
+				shared_ptr<hittable> shape = shape_ptrs[i];
+				if (shape && shape->hit_fast(r, t_min, t_max))
+					return true;
+			}
+		}
+		else
+		{
+			bvh_node* left = node->left;
+			if (left && left->bounding.hit(r, t_min, t_max))
+				node_stack.push(left);
+
+			bvh_node* right = node->right;
+			if (right && right->bounding.hit(r, t_min, t_max))
+				node_stack.push(right);
+		}
+	}
+
+	return true;
+}
 
 bool bvh::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
 {

@@ -71,6 +71,58 @@ public:
 		return 0;
 	}
 
+	virtual bool hit_fast(const ray& r, fType t_min, fType t_max) const override
+	{
+		float o_u, o_v, o_k, d_u, d_v, d_k;
+		switch (k)
+		{
+		case 0:
+			o_u = r.origin[1];
+			o_v = r.origin[2];
+			o_k = r.origin[0];
+			d_u = r.direction[1];
+			d_v = r.direction[2];
+			d_k = r.direction[0];
+			break;
+		case 1:
+			o_u = r.origin[2];
+			o_v = r.origin[0];
+			o_k = r.origin[1];
+			d_u = r.direction[2];
+			d_v = r.direction[0];
+			d_k = r.direction[1];
+			break;
+		case 2:
+			o_u = r.origin[0];
+			o_v = r.origin[1];
+			o_k = r.origin[2];
+			d_u = r.direction[0];
+			d_v = r.direction[1];
+			d_k = r.direction[2];
+			break;
+		default:
+			return false;
+		}
+
+		/* Calculate the plane intersection (Typo in the thesis?) */
+		float t = (n_d - o_u * n_u - o_v * n_v - o_k) / (d_u * n_u + d_v * n_v + d_k);
+		if (t < static_cast<float>(t_min) || t > static_cast<float>(t_max))
+			return false;
+
+		/* Calculate the projected plane intersection point */
+		const float hu = o_u + t * d_u - a_u;
+		const float hv = o_v + t * d_v - a_v;
+
+		/* In barycentric coordinates */
+		float u = hv * b_nu + hu * b_nv;
+		float v = hu * c_nu + hv * c_nv;
+
+		if (u >= 0 && v >= 0 && u + v <= 1.0f)
+			return true;
+
+		return false;
+	}
+
 	virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override
 	{
 		float o_u, o_v, o_k, d_u, d_v, d_k;
@@ -195,9 +247,6 @@ public:
 
 		rec.uv = t0 * (1.0 - bary.x - bary.y) + t1 * bary.x + t2 * bary.y;
 	}
-
-// 	virtual fType pdf_value(const point3& origin, const vec3& v) const override;
-// 	virtual vec3 random(const vec3& origin) const override;
 
 private:
 	//Pre-computed triangle representation based on Ingo Wald's TriAccel layout.

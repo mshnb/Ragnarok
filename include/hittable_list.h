@@ -40,6 +40,7 @@ public:
             aabb_ptr->surrounding_box(aabb_ptr, obj_aabb);
     }
     
+    virtual bool hit_fast(const ray& r, fType t_min, fType t_max) const override;
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
     
     virtual fType pdf_value(const point3& origin, const vec3& v) const override;
@@ -48,6 +49,17 @@ public:
 public:
     std::vector<shared_ptr<hittable>> objects;
 };
+
+bool hittable_list::hit_fast(const ray& r, fType t_min, fType t_max) const
+{
+	for (const auto& object : objects)
+	{
+        if (object->hit_fast(r, t_min, t_max))
+            return true;
+	}
+
+	return false;
+}
 
 bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const
 {

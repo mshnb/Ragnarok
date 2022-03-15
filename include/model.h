@@ -31,10 +31,6 @@ class model : public hittable_list
 public:
 	model() : hittable_list() {}
 
-// 	virtual bool hit(const ray& r, fType t_min, fType t_max, hit_record& record) const override;
-// 	virtual fType pdf_value(const point3& origin, const vec3& v) const override;
-// 	virtual vec3 random(const vec3& origin) const override;
-
 	bool loadObj(std::string& file_path, shared_ptr<hittable_list> lights, std::map<std::string, vec3>& matname2radiance)
 	{
 		tinyobj::attrib_t inattrib;
@@ -85,9 +81,6 @@ public:
 			WARN("need to regenerate all normals");
 
 		loadMeshes(inattrib, inshapes, light_mat_index, lights);
-
-		INFO("aabb min = [%.4f, %.4f, %.4f]", aabb_ptr->min().x, aabb_ptr->min().y, aabb_ptr->min().z);
-		INFO("aabb max = [%.4f, %.4f, %.4f]", aabb_ptr->max().x, aabb_ptr->max().y, aabb_ptr->max().z);
 
 		return true;
 	}
@@ -214,50 +207,16 @@ private:
 			if (triangle_count == 0)
 				continue;
 
+			int mesh_count = 0;
 			vertexMap.clear();
 			vertexBuffer.clear();
 
-			int current_material_id;
-			int prev_material_id;
 			shared_ptr<mesh> mesh_ptr = nullptr;
-
 			for (size_t f = 0; f < triangle_count; f++)
 			{
-				current_material_id = inmesh.material_ids[f];
-				if (f == 0)
-				{
-					prev_material_id = current_material_id;
-					mesh_ptr = make_shared<mesh>(inshape.name, materials[current_material_id]);
-				}
-					
-				if (current_material_id != prev_material_id)
-				{
-					int vertex_count = vertexBuffer.size();
-
-					mesh_ptr->vertices.reserve(vertex_count);
-					mesh_ptr->normals.reserve(vertex_count);
-					mesh_ptr->texcoords.reserve(vertex_count);
-
-					for (size_t i = 0; i < vertex_count; i++)
-					{
-						mesh_ptr->vertices.push_back(vertexBuffer[i].p);
-						mesh_ptr->normals.push_back(vertexBuffer[i].n);
-						mesh_ptr->texcoords.push_back(vertexBuffer[i].uv);
-					}
-
-					this->add(mesh_ptr);
-
-					for (size_t i = 0; i < light_mat_index.size(); i++)
-						if (light_mat_index[i] == prev_material_id)
-						{
-							mesh_ptr->is_light = true;
-							lights->add(mesh_ptr);
-							break;
-						}
-
-					prev_material_id = current_material_id;
-					mesh_ptr = make_shared<mesh>(inshape.name, materials[current_material_id]);
-				}
+				int current_material_id = inmesh.material_ids[f];
+				if(!mesh_ptr)
+					mesh_ptr = make_shared<mesh>(inshape.name + std::to_string(mesh_count++), materials[current_material_id]);
 
 				shared_ptr<triangle> tri = make_shared<triangle>();
 				auto tri_aabb = tri->bounding_box();
@@ -295,33 +254,37 @@ private:
 				}
 
 				mesh_ptr->add(tri);
-			}
 
-			if (!mesh_ptr)
-				continue;
-
-			//handle the last mesh
-			int vertex_count = vertexBuffer.size();
-			mesh_ptr->vertices.reserve(vertex_count);
-			mesh_ptr->normals.reserve(vertex_count);
-			mesh_ptr->texcoords.reserve(vertex_count);
-
-			for (size_t i = 0; i < vertex_count; i++)
-			{
-				mesh_ptr->vertices.push_back(vertexBuffer[i].p);
-				mesh_ptr->normals.push_back(vertexBuffer[i].n);
-				mesh_ptr->texcoords.push_back(vertexBuffer[i].uv);
-			}
-
-			this->add(mesh_ptr);
-
-			for (size_t i = 0; i < light_mat_index.size(); i++)
-				if (light_mat_index[i] == current_material_id)
+				int next_material_id = f + 1 < triangle_count ? inmesh.material_ids[f + 1] : -1;
+				if (current_material_id != next_material_id)
 				{
-					mesh_ptr->is_light = true;
-					lights->add(mesh_ptr);
-					break;
+					//commit mesh
+					int vertex_count = vertexBuffer.size();
+
+					mesh_ptr->vertices.reserve(vertex_count);
+					mesh_ptr->normals.reserve(vertex_count);
+					mesh_ptr->texcoords.reserve(vertex_count);
+
+					for (size_t i = 0; i < vertex_count; i++)
+					{
+						mesh_ptr->vertices.push_back(vertexBuffer[i].p);
+						mesh_ptr->normals.push_back(vertexBuffer[i].n);
+						mesh_ptr->texcoords.push_back(vertexBuffer[i].uv);
+					}
+
+					this->add(mesh_ptr);
+
+					for (size_t i = 0; i < light_mat_index.size(); i++)
+						if (light_mat_index[i] == current_material_id)
+						{
+							mesh_ptr->is_light = true;
+							lights->add(mesh_ptr);
+							break;
+						}
+
+					mesh_ptr = nullptr;
 				}
+			}
 		}
 
 		return true;
