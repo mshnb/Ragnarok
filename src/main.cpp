@@ -202,13 +202,13 @@ int main(int argc, const char * argv[])
 
     //render
     fType sample_scale = 1.0 / samples_per_pixel;
-    int total_samples = image_width * image_height * samples_per_pixel;
-    int current_samples = 0;
+    int total_pixels = image_width * image_height;
+    int current_pixels = 0;
 
     clock_t start_time = clock();
 
 #pragma omp parallel for
-    for(int y = image_height - 1; y >= 0; y--)
+    for(int y = 0; y < image_height; y++)
     {
         for(int x = 0; x < image_width; x++)
         {
@@ -221,8 +221,6 @@ int main(int argc, const char * argv[])
                 ray r = cam.get_ray(u, v);
                 pixel_color += ray_color(r, scene);
             }
-            int flip_y = image_height - 1 - y;
-            int index = 3 * (flip_y * image_width + x);
 
             //write color
 			fType r = sample_scale * pixel_color.r;
@@ -238,16 +236,19 @@ int main(int argc, const char * argv[])
 				b = std::pow(b, gamma);
             }
 
+			int flip_y = image_height - 1 - y;
+			int index = 3 * (flip_y * image_width + x);
+
 #pragma omp critical
             {
 				output[index + 0] = static_cast<float>(r);
 				output[index + 1] = static_cast<float>(g);
 				output[index + 2] = static_cast<float>(b);
 
-                current_samples += samples_per_pixel;
+                current_pixels += 1;
             }
 
-			printf("\rrendering %.2f%%...", (100.0f * current_samples) / total_samples);
+			printf("\rrendering %.2f%%...", (100.0f * current_pixels) / total_pixels);
         }
     }
 
