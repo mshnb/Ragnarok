@@ -102,7 +102,7 @@ class dielectric : public material
             {
 				//reflect
                 wo = vec3(-wi.x, wi.y, -wi.z);
-                srec.attenuation.assign(fresnel);
+                srec.attenuation.assign(1);
 				srec.pdf_value = fresnel;
             }
             else 
@@ -112,7 +112,7 @@ class dielectric : public material
                 /* Radiance must be scaled to account for the solid angle compression
                     that occurs when crossing the interface. */
                 fType factor = cosThetaT < 0 ? (1.0 / ior) : ior;
-                srec.attenuation.assign(factor * factor * (1.0 - fresnel));
+                srec.attenuation.assign(factor * factor);
 				srec.pdf_value = 1.0 - fresnel;
             }
 
@@ -304,7 +304,7 @@ public:
 
         int scatter_type = choseSpecular ? 0 : 1;
 		srec.pdf_value = pdf(rec, wi, wo, scatter_type);
-        srec.attenuation = eval(rec, wi, wo, scatter_type);
+        srec.attenuation = eval(rec, wi, wo, scatter_type) / srec.pdf_value;
 		srec.scatter_ray = ray(rec.p, shadingFrame.world(wo));
 
 		return true;

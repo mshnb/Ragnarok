@@ -193,7 +193,7 @@ bool bvh::hit_fast(const ray& r, fType t_min, fType t_max) const
 		}
 	}
 
-	return true;
+	return false;
 }
 
 bool bvh::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const

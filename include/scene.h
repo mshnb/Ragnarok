@@ -18,12 +18,12 @@ public:
 	bool intersect_fast(const ray& r, fType t_min, fType t_max) const;
 	bool intersect(const ray& r, hit_record& rec, fType t_min = Epsilon, fType t_max = infinity) const;
 
-	void add_hittable(shared_ptr<hittable> obj)
-	{
-		shapes.push_back(obj);
-		triangleFlag.push_back(false);
-		temp_hittable_list.push_back(obj);
-	}
+// 	void add_hittable(shared_ptr<hittable> obj)
+// 	{
+// 		shapes.push_back(obj);
+// 		triangleFlag.push_back(false);
+// 		temp_hittable_list.push_back(obj);
+// 	}
 
 	void add_model(shared_ptr<model> obj)
 	{
@@ -52,7 +52,7 @@ public:
 
 		//buid bvh
 		clock_t start_time = clock();
-		//bvh_root = make_shared<bvh_node>(temp_hittable_list);
+
 		bvh_root = make_shared<bvh>(temp_hittable_list);
 		temp_hittable_list.swap(std::vector<shared_ptr<hittable>> ());
 

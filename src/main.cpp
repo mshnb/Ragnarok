@@ -34,77 +34,93 @@ int max_depth = 10;
 int rr_depth = 3;
 bool gamma_correct = false;
 
-//TODO use while instead of recursion
-color ray_color(const ray& r, Scene& scene, int depth, fType bsdf_pdf = 0.0)
+color ray_color(ray& r_origin, Scene& scene)
 {
-	if (depth >= max_depth)
-		return color(0.0);
-
-    hit_record rec;
-    if (!scene.intersect(r, rec))
-        return scene.background;
-    
-    auto bsdf = rec.mat_ptr;
-    if (rec.hit_light)
-    {
-        if(depth == 0)
-            return bsdf->emitted(rec);
-
-        if (!rec.front_face)
-            return color(0.0);
-
-        /* Compute the prob. of generating that direction using the
-           implemented direct illumination sampling technique */
-		fType light_dir_pdf = scene.pdfLightDirect(rec, r.direction);
-        fType weight = bsdf_pdf < 1e-6 ? 1.0 : mix_weight(bsdf_pdf, light_dir_pdf);
-        return bsdf->emitted(rec)* weight;
-    }   
-
+    ray r = r_origin;
+    int depth = 0;
+    fType bsdf_pdf = 0.0;
+    color throughput(1.0);
     color ret(0.0);
 
-	//sample direct illumination
-    vec3 light_dir;
-	fType light_pdf;
-	color direct = scene.sampleLights(rec.p, rec.normal, light_dir, light_pdf);
-    if (!direct.near_zero())
+    hit_record rec;
+    while (depth < max_depth)
     {
-		onb shadingFrame(rec.normal);
-		vec3 wi = shadingFrame.local(-r.direction);
-        vec3 wo = shadingFrame.local(light_dir);
-
-        color bsdfVal = bsdf->eval(rec, wi, wo);
-        if (!bsdfVal.near_zero())
+        if (!scene.intersect(r, rec))
         {
-			// Calculate prob. of having generated that direction using BSDF sampling
-			fType bsdfPdf = bsdf->pdf(rec, wi, wo);
-
-			/* Weight using the power heuristic */
-			fType weight = mix_weight(light_pdf, bsdfPdf);
-            ret += direct * bsdfVal * weight;
+            ret += throughput * scene.background;
+            break;
         }
+
+		auto bsdf = rec.mat_ptr;
+
+        //check hit light
+        if (rec.hit_light)
+        {
+            if (!rec.front_face)
+                break;
+
+            //first bounce or delta distribution
+            if (depth == 0 || bsdf_pdf < 1e-6)
+                ret += throughput * bsdf->emitted(rec);
+            else
+            {
+                /* Compute the prob. of generating that direction using the
+                implemented direct illumination sampling technique */
+                fType light_dir_pdf = scene.pdfLightDirect(rec, r.direction);
+                fType weight = mix_weight(bsdf_pdf, light_dir_pdf);
+                ret += throughput * weight * bsdf->emitted(rec);
+            }
+
+            break;
+        }
+
+		//sample direct illumination
+		vec3 light_dir;
+		fType light_pdf;
+		color directVal = scene.sampleLights(rec.p, rec.normal, light_dir, light_pdf);
+		if (!directVal.near_zero())
+		{
+			onb shadingFrame(rec.normal);
+			vec3 wi = shadingFrame.local(-r.direction);
+			vec3 wo = shadingFrame.local(light_dir);
+
+			color bsdfVal = bsdf->eval(rec, wi, wo);
+			if (!bsdfVal.near_zero())
+			{
+				// Calculate prob. of having generated that direction using BSDF sampling
+				fType bsdfPdf = bsdf->pdf(rec, wi, wo);
+
+				/* Weight using the power heuristic */
+				fType weight = mix_weight(light_pdf, bsdfPdf);
+				ret += throughput * weight * directVal * bsdfVal;
+			}
+		}
+
+		//sample indirect illumination
+		scatter_record srec;
+        if (!bsdf->scatter(r.direction, rec, srec) || srec.pdf_value < 1e-6)
+            break;
+
+		// Russian roulette
+		fType rr_weight = 1.0;
+		if (depth >= rr_depth)
+		{
+			fType rr = 0.618;
+            if (random_value() > rr)
+                break;
+
+			rr_weight = 1.0 / rr;
+		}
+
+        r = srec.scatter_ray;
+        bsdf_pdf = srec.delta_distributed ? 0.0 : srec.pdf_value;
+        throughput *= (rr_weight * srec.attenuation);
+
+        depth += 1;
     }
 
-	//sample indirect illumination
-    scatter_record srec;
-    if (!bsdf->scatter(r.direction, rec, srec) || srec.pdf_value < 1e-6)
-        return ret;
+    return ret;
 
-    //TODO Prevent light leaks due to the use of shading normals
-
-    // Russian roulette
-    fType rr_weight = 1.0;
-    if (depth >= rr_depth)
-    {
-        fType rr = 0.618;
-        if (random_value() > rr)
-            return ret;
-
-        rr_weight = 1.0 / rr;
-    }
-
-    fType pdf_value = srec.delta_distributed ? 0.0 : srec.pdf_value;
-    color indirect = rr_weight * srec.attenuation * ray_color(srec.scatter_ray, scene, depth + 1, pdf_value) / srec.pdf_value;
-    return ret + indirect;
 }
 
 int main(int argc, const char * argv[])
@@ -203,7 +219,7 @@ int main(int argc, const char * argv[])
                 fType v = (y + random_value()) / (image_height - 1);
 
                 ray r = cam.get_ray(u, v);
-                pixel_color += ray_color(r, scene, 0);
+                pixel_color += ray_color(r, scene);
             }
             int flip_y = image_height - 1 - y;
             int index = 3 * (flip_y * image_width + x);
@@ -222,12 +238,14 @@ int main(int argc, const char * argv[])
 				b = std::pow(b, gamma);
             }
 
-            output[index + 0] = static_cast<float>(r);
-            output[index + 1] = static_cast<float>(g);
-            output[index + 2] = static_cast<float>(b);
+#pragma omp critical
+            {
+				output[index + 0] = static_cast<float>(r);
+				output[index + 1] = static_cast<float>(g);
+				output[index + 2] = static_cast<float>(b);
 
-#pragma omp atomic
-			current_samples += samples_per_pixel;
+                current_samples += samples_per_pixel;
+            }
 
 			printf("\rrendering %.2f%%...", (100.0f * current_samples) / total_samples);
         }
