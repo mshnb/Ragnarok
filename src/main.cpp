@@ -245,7 +245,7 @@ int main(int argc, const char * argv[])
 				output[index + 1] = static_cast<float>(g);
 				output[index + 2] = static_cast<float>(b);
 
-                current_pixels += 1;
+				current_pixels += 1;
             }
 
 			printf("\rrendering %.2f%%...", (100.0f * current_pixels) / total_pixels);

@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <cstdlib>
+#include <random>
 
 #define USE_FP32
 
@@ -90,7 +91,10 @@ inline int clamp(int x, int min, int max)
 //return a random real in [0,1)
 inline fType random_value()
 {
-    return static_cast<fType>(rand() / (RAND_MAX + 1.0));
+	static thread_local std::default_random_engine e;
+	static thread_local std::uniform_real_distribution<fType> distribution(static_cast<fType>(0.0), static_cast<fType>(1.0));
+
+    return distribution(e);
 }
 
 //return a random real in [min,max)

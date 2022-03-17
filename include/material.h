@@ -213,6 +213,9 @@ public:
     //scatter_type -1:all 0:specular 1:diffuse
 	virtual color eval(const hit_record& rec, const vec3& wi, const vec3& wo, int scatter_type = -1) const override
     {
+        if (wi.y * wo.y < 0)
+            return color(0.0);
+
         fType diffuseSamplingWeight = 1.0 - specularSamplingWeight;
 
 		bool hasSpecular = specularSamplingWeight > 0 && (scatter_type == -1 || scatter_type == 0);
@@ -266,8 +269,12 @@ public:
 
 	virtual bool scatter(const vec3& in_dir, const hit_record& rec, scatter_record& srec) const override
 	{
+        vec3 normal = rec.normal;
+		if (two_sides && !rec.front_face)
+			normal *= -1;
+
 		onb shadingFrame(rec.normal);
-		vec3 wi = -shadingFrame.local(in_dir);
+		vec3 wi = shadingFrame.local(-in_dir);
 		if (wi.y < 1e-6)
 			return false;
 
@@ -317,6 +324,7 @@ public:
 	shared_ptr<texture> diffuse;
 	shared_ptr<texture> specular;
     fType shiness;
+    bool two_sides = false;
 };
 
 #endif /* material_h */
