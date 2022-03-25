@@ -55,16 +55,6 @@ public:
         return aabb_ptr;
     }
 
-    virtual fType pdf_value(const point3& origin, const vec3& v) const
-    {
-        return 0.0;
-    }
-
-    virtual vec3 random(const vec3& origin) const
-    {
-        return vec3(1, 0, 0);
-    }
-
 	virtual fType getSamplingWeight() const
 	{
 		//TODO use all triangle's area?

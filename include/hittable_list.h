@@ -43,9 +43,6 @@ public:
     virtual bool hit_fast(const ray& r, fType t_min, fType t_max) const override;
     virtual bool hit(const ray& r, fType t_min, fType t_max, hit_cache& cache) const override;
     
-    virtual fType pdf_value(const point3& origin, const vec3& v) const override;
-    virtual vec3 random(const vec3& origin) const override;
-    
 public:
     std::vector<shared_ptr<hittable>> objects;
 };
@@ -78,24 +75,6 @@ bool hittable_list::hit(const ray& r, fType t_min, fType t_max, hit_cache& cache
     }
 
     return hit_anything;
-}
-
-fType hittable_list::pdf_value(const point3& o, const vec3& v) const
-{
-    fType weight = 1.0/objects.size();
-    fType sum = 0.0;
-
-    for (const auto& object : objects)
-        sum += weight * object->pdf_value(o, v);
-
-    return sum;
-}
-
-vec3 hittable_list::random(const vec3& o) const
-{
-    auto int_size = static_cast<int>(objects.size());
-    int idx = random_int(0, int_size-1);
-    return objects[idx]->random(o);
 }
 
 #endif /* hittable_list_h */
