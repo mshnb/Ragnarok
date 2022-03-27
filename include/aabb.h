@@ -27,24 +27,6 @@ public:
         minimum = a;
         maximum = b;
     }
-
-    bool hit_slow(const ray& r, fType t_min, fType t_max) const
-    {
-        for (int i = 0; i < 3; i++)
-        {
-            fType t0 = fmin((minimum[i] - r.origin[i]) / r.direction[i],
-                           (maximum[i] - r.origin[i]) / r.direction[i]);
-            fType t1 = fmax((minimum[i] - r.origin[i]) / r.direction[i],
-                           (maximum[i] - r.origin[i]) / r.direction[i]);
-            
-            t_min = fmax(t0, t_min);
-            t_max = fmin(t1, t_max);
-            
-            if (t_max <= t_min)
-                return false;
-        }
-        return true;
-    }
     
     //fast verision by Andrew Kensler at Pixar
     inline bool hit(const ray& r, fType t_min, fType t_max) const
