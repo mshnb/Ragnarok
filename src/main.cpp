@@ -120,11 +120,45 @@ color ray_color(ray& r_origin, Scene& scene)
     }
 
     return ret;
+}
 
+int parse_arg(int argc, const char* argv[])
+{
+	for (size_t i = 1; i < argc; )
+	{
+		if (!strcmp(argv[i], "-i")) {
+			++i; if (i >= argc) { return -1; }
+            model_name = argv[i++];
+		}
+		else if (!strcmp(argv[i], "-d")) {
+			++i; if (i >= argc) { return -1; }
+            resource_dir = argv[i++];
+		}
+		else if (!strcmp(argv[i], "-s"))
+		{
+			++i; if (i >= argc) { return -1; }
+            samples_per_pixel = std::stoi(argv[i++]);
+		}
+		else if (!strcmp(argv[i], "-g"))
+		{
+		    ++i; if (i >= argc) { return -1; }
+            gamma_correct = true;
+		}
+		else
+		{
+			WARN("unknow command %s.", argv[i]);
+            return -1;
+		}
+	}
+
+	return 0;
 }
 
 int main(int argc, const char * argv[])
 {
+    if (parse_arg(argc, argv))
+        return 1;
+
     //image
     fType aspect_ratio;
     int image_width, image_height;
@@ -215,8 +249,8 @@ int main(int argc, const char * argv[])
             color pixel_color(0, 0, 0);
             for(int s = 0; s < samples_per_pixel; s++)
             {
-                fType u = (x + random_value()) / (image_width - 1);
-                fType v = (y + random_value()) / (image_height - 1);
+                fType u = (x + random_value()) / image_width;
+                fType v = (y + random_value()) / image_height;
 
                 ray r = cam.get_ray(u, v);
                 pixel_color += ray_color(r, scene);
@@ -227,7 +261,7 @@ int main(int argc, const char * argv[])
 			fType g = sample_scale * pixel_color.g;
 			fType b = sample_scale * pixel_color.b;
 
-			// Divide the color by the number of samples and gamma-correct for gamma = 2.0
+			// Divide the color by the number of samples and gamma-correct for gamma = 2.2
             if (gamma_correct)
             {
 				fType gamma = 1.0 / 2.2;
@@ -239,14 +273,11 @@ int main(int argc, const char * argv[])
 			int flip_y = image_height - 1 - y;
 			int index = 3 * (flip_y * image_width + x);
 
-#pragma omp critical
-            {
-				output[index + 0] = static_cast<float>(r);
-				output[index + 1] = static_cast<float>(g);
-				output[index + 2] = static_cast<float>(b);
-
-				current_pixels += 1;
-            }
+			output[index + 0] = static_cast<float>(r);
+			output[index + 1] = static_cast<float>(g);
+			output[index + 2] = static_cast<float>(b);
+#pragma omp atomic
+			current_pixels += 1;
 
 			printf("\rrendering %.2f%%...", (100.0f * current_pixels) / total_pixels);
         }
